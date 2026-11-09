@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import { EMPTY_LIST, renderApp, stubApi } from "@/test/renderApp"
 
 afterEach(() => {
@@ -20,7 +20,8 @@ it.each([
       tests: [{ input: "f()", expected: "1" }], due_date: "2026-11-09", interval_days: 0,
       created_at: "", updated_at: "", last_reviewed_at: null }, "/api/tags": [] })
   renderApp(path)
-  expect(await screen.findByRole("heading", { level: 1, name: heading })).toBeInTheDocument()
+  // waitFor: ekran może się przerysować po wczytaniu danych (np. pusta biblioteka)
+  await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: heading })).toBeInTheDocument())
 })
 
 it("panel pokazuje liczbę zadań z API", async () => {
