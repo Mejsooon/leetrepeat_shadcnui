@@ -33,3 +33,12 @@ it("getHealth woła /api/health", async () => {
     new Response(JSON.stringify({ status: "ok", version: "3.0.0" }), { status: 200 })))
   await expect(getHealth()).resolves.toEqual({ status: "ok", version: "3.0.0" })
 })
+
+it("request rzuca ApiError(500) gdy odpowiedź błędu nie jest JSON-em", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+    new Response("Internal Server Error", { status: 500, headers: { "Content-Type": "text/plain" } })))
+  const error = (await request("/tasks").catch((e) => e)) as ApiError
+  expect(error).toBeInstanceOf(ApiError)
+  expect(error.status).toBe(500)
+  expect(error.message).toBe("Błąd 500")
+})

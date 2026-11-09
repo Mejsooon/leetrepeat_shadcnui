@@ -20,9 +20,14 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError(0, "Brak połączenia")
   }
-  // 204 i puste odpowiedzi nie mają treści JSON
+  // 204 i puste odpowiedzi nie mają treści; błąd serwera może przyjść jako zwykły tekst, nie JSON
   const text = await response.text()
-  const data = text ? JSON.parse(text) : null
+  let data = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    if (response.ok) throw new ApiError(response.status, "Nieprawidłowa odpowiedź serwera")
+  }
   if (!response.ok) {
     const detail = typeof data?.detail === "string" ? data.detail : `Błąd ${response.status}`
     throw new ApiError(response.status, detail)
