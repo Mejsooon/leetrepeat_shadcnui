@@ -226,3 +226,4 @@ leetrepeat.db
 node_modules/
 !frontend/dist/
 !frontend/dist/**
+e2e-test.db

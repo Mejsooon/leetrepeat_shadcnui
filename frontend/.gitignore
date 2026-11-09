@@ -20,3 +20,8 @@ node_modules
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright
+test-results/
+playwright-report/
+e2e-test.db
