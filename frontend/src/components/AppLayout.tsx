@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react"
+import { CircleCheck } from "lucide-react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Outlet, useLocation } from "react-router"
 import { listTasks } from "@/api"
 import { AppSidebar } from "@/components/AppSidebar"
 import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { SiteHeader } from "@/components/SiteHeader"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { HeaderStatusContext } from "@/headerStatus"
 
 // Ścieżka w nagłówku dla każdego ekranu
 function crumbsFor(pathname: string): string[] {
@@ -17,10 +19,18 @@ function crumbsFor(pathname: string): string[] {
   return ["LeetRepeat", "Pulpit"]
 }
 
+const SAVED_LOCALLY = (
+  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <CircleCheck className="size-3.5 text-success" aria-hidden="true" />
+    Zapisano lokalnie
+  </span>
+)
+
 // Wspólny układ: panel boczny + nagłówek + treść ekranu
 export function AppLayout() {
   const { pathname } = useLocation()
   const [taskCount, setTaskCount] = useState<number | undefined>(undefined)
+  const [status, setStatus] = useState<ReactNode | null>(null)
 
   // Licznik przy „Zadania” — odświeżany po każdej zmianie ekranu (np. po dodaniu albo usunięciu zadania)
   useEffect(() => {
@@ -30,15 +40,17 @@ export function AppLayout() {
   }, [pathname])
 
   return (
-    <SidebarProvider>
-      <AppSidebar taskCount={taskCount} />
-      <SidebarInset>
-        <SiteHeader crumbs={crumbsFor(pathname)} />
-        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">
-          <ConnectionBanner />
-          <Outlet />
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <HeaderStatusContext.Provider value={setStatus}>
+      <SidebarProvider>
+        <AppSidebar taskCount={taskCount} />
+        <SidebarInset>
+          <SiteHeader crumbs={crumbsFor(pathname)} status={status ?? SAVED_LOCALLY} />
+          <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">
+            <ConnectionBanner />
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </HeaderStatusContext.Provider>
   )
 }

@@ -18,7 +18,7 @@ export function renderApp(path: string) {
 
 // Atrapa fetch: odpowiedź wybierana po początku adresu, np. { "/api/tasks?": {...}, "/api/tags": [...] }
 export function stubApi(routesMap: Record<string, unknown>) {
-  const fetchMock = vi.fn(async (url: string) => {
+  const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
     const key = Object.keys(routesMap)
       .sort((a, b) => b.length - a.length)
       .find((k) => url.startsWith(k))
