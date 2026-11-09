@@ -1,7 +1,11 @@
 import { CircleAlert, Timer } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router"
-import { ApiError, getSession, getTask, runTests, updateNotes, type RunResponse, type SessionItem, type Task } from "@/api"
+import {
+  ApiError, getReviewPreview, getSession, getTask, runTests, submitReview, updateNotes,
+  type Rating, type ReviewPreviewItem, type RunResponse, type SessionItem, type Task,
+} from "@/api"
+import { RatingPanel } from "@/components/session/RatingPanel"
 import { SolvePanel, type RunError } from "@/components/session/SolvePanel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -41,6 +45,11 @@ export default function Sesja() {
   const [now, setNow] = useState(Date.now())
   const [ratedSeconds, setRatedSeconds] = useState(0)                // czas zamrożony przy wejściu w ocenę
 
+  const [preview, setPreview] = useState<ReviewPreviewItem[] | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const savingRef = useRef(false)                                    // blokada podwójnego zapisu oceny
   const runningRef = useRef(false)                                   // blokada podwójnego uruchomienia (stan Reacta jest asynchroniczny)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingNotes = useRef<{ id: number; text: string } | null>(null)
@@ -76,6 +85,8 @@ export default function Sesja() {
         setHintUsed(false)
         setSolutionUsed(false)
         setPhase("solve")
+        setPreview(null)
+        setSaveError(null)
         setStartedAt(Date.now())
         setNow(Date.now())
       })
@@ -166,6 +177,32 @@ export default function Sesja() {
     saveNotes()
     setRatedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
     setPhase("rate")
+    if (task) getReviewPreview(task.id).then(setPreview).catch(() => setPreview(null))
+  }
+
+  // Zapis oceny i przejście dalej. „Znowu” → zadanie na koniec kolejki, inaczej zadanie ukończone.
+  async function saveRating(rating: Rating) {
+    if (!task || savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await submitReview(task.id, {
+        rating,
+        duration_seconds: ratedSeconds,
+        tests_passed: lastRun ? lastRun.results.filter((r) => r.status === "pass").length : null,
+        tests_total: lastRun ? lastRun.results.length : null,
+        hint_used: hintUsed,
+        solution_used: solutionUsed,
+      })
+      setQueue((q) => (q ? (rating === "again" ? [...q.slice(1), q[0]] : q.slice(1)) : q))
+      if (rating !== "again") setCompleted((n) => n + 1)
+      setTurn((n) => n + 1)
+    } catch {
+      setSaveError("Nie udało się zapisać oceny")
+    }
+    savingRef.current = false
+    setSaving(false)
   }
 
   // --- Widoki ---
@@ -204,6 +241,9 @@ export default function Sesja() {
 
   if (!task) return <p className="text-sm text-muted-foreground">Wczytywanie zadania…</p>
 
+  // Następne w sesji: kolejne w kolejce (przy ostatnim zadaniu — brak)
+  const nextItem = queue.length > 1 ? items[queue[1]] ?? null : null
+  const remainingAfter = queue.length - 1
   const lastReviewed = task.last_reviewed_at ? `Ostatnia powtórka: ${longDate(task.last_reviewed_at.slice(0, 10), false)}` : null
   const subtitle = [task.tags.join(" · "), lastReviewed].filter(Boolean).join(" · ")
 
@@ -249,12 +289,20 @@ export default function Sesja() {
           onNotesChange={changeNotes}
         />
       ) : (
-        // Ekran oceny — Task 6 (RatingPanel); tymczasowo przejście dalej bez zapisu
-        <div className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold">Jak Ci poszło?</h2>
-          <p className="text-sm text-muted-foreground">{Object.keys(items).length} zadań w sesji</p>
-          <Button className="self-start" onClick={() => setCompleted((n) => n)}>Dalej</Button>
-        </div>
+        <RatingPanel
+          task={task}
+          code={code}
+          lastRun={lastRun}
+          durationSeconds={ratedSeconds}
+          hintUsed={hintUsed}
+          solutionUsed={solutionUsed}
+          preview={preview}
+          nextItem={nextItem}
+          remainingAfter={remainingAfter}
+          saving={saving}
+          error={saveError}
+          onSave={saveRating}
+        />
       )}
     </div>
   )

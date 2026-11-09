@@ -163,3 +163,111 @@ it("notatka zapisana przy przejściu do oceny", async () => {           // Revie
   fireEvent.click(screen.getByRole("button", { name: "Przejdź do oceny" }))
   await waitFor(() => expect(callsTo(fetchMock, "PATCH", "/api/tasks/1/notes")).toHaveLength(1))
 })
+
+// --- Ocena (Task 6) ---
+
+async function openRating(path = "/sesja") {
+  const app = renderApp(path)
+  await screen.findByRole("heading", { name: "Two Sum" })
+  fireEvent.click(screen.getByRole("button", { name: "Przejdź do oceny" }))
+  await screen.findByRole("radio", { name: /Dobre/ })
+  return app
+}
+
+it("pokazuje terminy z podglądu", async () => {
+  stubSession()
+  await openRating()
+  expect(screen.getByRole("heading", { name: "Jak Ci poszło?" })).toBeInTheDocument()
+  expect(screen.getByText("Za 3 dni")).toBeInTheDocument()
+  expect(screen.getByText("12 listopada 2026")).toBeInTheDocument()
+  expect(screen.getByText("Dzisiaj, w tej sesji")).toBeInTheDocument()
+  expect(screen.getByText("Bez podpowiedzi i bez podglądu rozwiązania.")).toBeInTheDocument()
+  expect(screen.getByText("Valid Parentheses")).toBeInTheDocument()   // następne w sesji
+})
+
+it("klawisze 1-4 wybierają ocenę", async () => {
+  stubSession()
+  await openRating()
+  await userEvent.keyboard("4")
+  expect(screen.getByRole("radio", { name: /Łatwe/ })).toBeChecked()
+  expect(screen.getByText("Two Sum wróci 16 listopada.")).toBeInTheDocument()
+  await userEvent.keyboard("1")
+  expect(screen.getByRole("radio", { name: /Znowu/ })).toBeChecked()
+  expect(screen.getByText("Two Sum wróci jeszcze w tej sesji.")).toBeInTheDocument()
+})
+
+it("zapisuje ocenę z czasem i testami", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const fetchMock = stubSession()
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  fireEvent.click(screen.getByRole("button", { name: /Uruchom testy/ }))
+  await screen.findByText("Wszystkie testy przeszły")
+  act(() => vi.advanceTimersByTime(30_000))
+  fireEvent.click(screen.getByRole("button", { name: "Przejdź do oceny" }))
+  expect(await screen.findByRole("heading", { name: "Rozwiązane. Jak Ci poszło?" })).toBeInTheDocument()
+  expect(screen.getByRole("radio", { name: /Dobre/ })).toBeChecked()          // testy przeszły → domyślnie Dobre
+  expect(screen.getAllByText("00:30")).toHaveLength(2)                         // pasek sesji + karta podsumowania
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" }))
+  await waitFor(() => expect(callsTo(fetchMock, "POST", "/api/tasks/1/review")).toHaveLength(1))
+  expect(JSON.parse(String(callsTo(fetchMock, "POST", "/api/tasks/1/review")[0][1]?.body))).toEqual({
+    rating: "good", duration_seconds: 30, tests_passed: 1, tests_total: 1, hint_used: false, solution_used: false,
+  })
+})
+
+it("Znowu przenosi zadanie na koniec", async () => {
+  stubSession()
+  await openRating()
+  expect(screen.getByRole("radio", { name: /Znowu/ })).toBeChecked()          // testy nieuruchomione → domyślnie Znowu
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" }))
+  expect(await screen.findByRole("heading", { name: "Valid Parentheses" })).toBeInTheDocument()
+  expect(screen.getByText("Powtórka 1 z 2")).toBeInTheDocument()
+  expect(screen.getByText("0 ukończonych · 2 pozostało")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Przejdź do oceny" }))
+  await screen.findByRole("radio", { name: /Dobre/ })
+  await userEvent.keyboard("3")
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" }))
+  expect(await screen.findByRole("heading", { name: "Two Sum" })).toBeInTheDocument()
+  expect(screen.getByText("Powtórka 2 z 2")).toBeInTheDocument()
+  expect(screen.getByLabelText("Twoje rozwiązanie")).toHaveValue("# start 1")
+})
+
+it("podwójne kliknięcie zapisuje raz", async () => {                    // Review Focus 2
+  let release: () => void = () => {}
+  const fetchMock = stubSession({
+    "POST /api/tasks/1/review": () => new Promise((resolve) => { release = () => resolve({ interval_days: 0, due_date: "2026-11-09" }) }),
+  })
+  await openRating()
+  const save = screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" })
+  fireEvent.click(save)
+  fireEvent.click(save)
+  await waitFor(() => expect(screen.getByRole("button", { name: /Zapisywanie/ })).toBeDisabled())
+  expect(callsTo(fetchMock, "POST", "/api/tasks/1/review")).toHaveLength(1)
+  act(() => release())
+  expect(await screen.findByRole("heading", { name: "Valid Parentheses" })).toBeInTheDocument()
+})
+
+it("błąd zapisu zostawia ekran oceny", async () => {
+  stubSession({ "POST /api/tasks/1/review": new Response("boom", { status: 500 }) })
+  await openRating()
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" }))
+  expect(await screen.findByText("Nie udało się zapisać oceny")).toBeInTheDocument()
+  expect(screen.getByRole("radio", { name: /Dobre/ })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" })).toBeEnabled()
+})
+
+it("koniec sesji", async () => {
+  stubSession()
+  const { router } = await openRating()
+  await userEvent.keyboard("3")
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" }))
+  await screen.findByRole("heading", { name: "Valid Parentheses" })
+  fireEvent.click(screen.getByRole("button", { name: "Przejdź do oceny" }))
+  await screen.findByRole("radio", { name: /Dobre/ })
+  await userEvent.keyboard("3")
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" }))
+  expect(await screen.findByText("Sesja zakończona")).toBeInTheDocument()
+  expect(screen.getByText("Ukończone zadania: 2")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Wróć na Pulpit" }))
+  await waitFor(() => expect(router.state.location.pathname).toBe("/"))
+})
