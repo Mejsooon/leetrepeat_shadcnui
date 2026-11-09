@@ -164,3 +164,24 @@ def test_restore_in_folder_with_special_chars(tmp_path, folder):   # przegląd k
     assert response.status_code == 200, response.text
     assert response.json()["tasks"] == 1
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted([folder, "dist"])   # nic nie powstało poza folderem bazy
+
+
+def test_backup_download_cross_site(client):                       # Etap 6
+    assert client.get("/api/backup", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert client.get("/api/settings").json()["database"]["last_backup_at"] is None
+
+
+def test_backup_temp_removed_on_error(app, tmp_path, monkeypatch):
+    import tempfile as tempfile_module
+    from fastapi.testclient import TestClient
+    temp_dir = tmp_path / "tmp"
+    temp_dir.mkdir()
+    real_mkstemp = tempfile_module.mkstemp
+    monkeypatch.setattr(routes.tempfile, "mkstemp", lambda **kw: real_mkstemp(dir=temp_dir, **{k: v for k, v in kw.items() if k != "dir"}))
+
+    def broken(*args):
+        raise OSError("dysk pełny")
+    monkeypatch.setattr(backup_service, "export_copy", broken)
+    client = TestClient(app, base_url="http://127.0.0.1", raise_server_exceptions=False)
+    assert client.get("/api/backup").status_code == 500
+    assert list(temp_dir.iterdir()) == []

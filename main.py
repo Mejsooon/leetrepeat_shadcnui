@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -43,11 +43,23 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
     # Przeglądarka dokleja wtedy Origin / Sec-Fetch-Site — po nich odrzucamy każdą zmianę danych i /api/run.
     @app.middleware("http")
     async def block_cross_site(request: Request, call_next):
-        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/"):
-            origin = request.headers.get("origin")
-            origin_host = urlsplit(origin).hostname if origin else None
+        path = request.url.path
+        changes_data = request.method in ("POST", "PUT", "PATCH", "DELETE") and path.startswith("/api/")
+        # GET /api/backup też: robi kopię i zapisuje „ostatnią kopię”, więc obca strona nie może go wywołać
+        if changes_data or (request.method == "GET" and path == "/api/backup"):
             cross_site = request.headers.get("sec-fetch-site") == "cross-site"
-            if cross_site or (origin is not None and origin_host not in ("127.0.0.1", "localhost")):
+            origin = request.headers.get("origin")
+            allowed_origin = True
+            if origin is not None:
+                parts = urlsplit(origin)
+                # Port serwera bierzemy z nagłówka Host (np. 127.0.0.1:8000); bez portu = 80
+                host_port = urlsplit("//" + request.headers.get("host", "")).port or 80
+                try:
+                    origin_port = parts.port or 80
+                except ValueError:
+                    origin_port = None
+                allowed_origin = parts.hostname in ("127.0.0.1", "localhost") and origin_port in (host_port, 5173)
+            if cross_site or not allowed_origin:
                 return JSONResponse({"detail": "Żądanie z innej strony zostało zablokowane"}, status_code=403)
         return await call_next(request)
 
@@ -65,7 +77,7 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     # Wszystko poza /api to frontend: istniejący plik z dist albo index.html (React Router sam wybierze ekran)
-    @app.get("/{path:path}", include_in_schema=False)
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def frontend(path: str):
         if path == "api" or path.startswith("api/"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
@@ -75,6 +87,9 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
         # Plik musi leżeć wewnątrz dist — ścieżki typu ../ nie wychodzą poza folder
         if path and file_path.startswith(dist_dir + os.sep) and os.path.isfile(file_path):
             return FileResponse(file_path)
+        # Brakujący plik (np. /favicon.ico) to 404, a nie strona aplikacji — trasy React nie mają kropek
+        if "." in path.rsplit("/", 1)[-1]:
+            return PlainTextResponse("Nie znaleziono", status_code=404)
         return FileResponse(index_file)
 
     return app

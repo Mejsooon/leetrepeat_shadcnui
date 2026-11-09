@@ -170,7 +170,11 @@ def create_router(db_path: str) -> APIRouter:
     def download_backup():
         fd, temp_path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
-        backup_service.export_copy(db_path, temp_path)
+        try:
+            backup_service.export_copy(db_path, temp_path)
+        except Exception:
+            os.remove(temp_path)          # nieudana kopia nie zostawia śmieci w katalogu tymczasowym
+            raise
         now = datetime.now()
         con = connect(db_path)
         try:
