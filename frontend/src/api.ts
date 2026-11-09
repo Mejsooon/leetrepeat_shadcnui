@@ -133,8 +133,9 @@ export function deleteTask(id: number): Promise<null> {
   return request<null>(`/tasks/${id}`, { method: "DELETE" })
 }
 
-export function updateNotes(id: number, notes: string): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>(`/tasks/${id}/notes`, { method: "PATCH", body: JSON.stringify({ notes }) })
+// keepalive: żądanie dokończy się nawet przy zamykaniu karty
+export function updateNotes(id: number, notes: string, keepalive = false): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/tasks/${id}/notes`, { method: "PATCH", body: JSON.stringify({ notes }), keepalive })
 }
 
 export function listTags(): Promise<Tag[]> {
