@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router"
+import { createBrowserRouter, RouterProvider, type RouteObject } from "react-router"
 import { AppLayout } from "@/components/AppLayout"
 import Pulpit from "@/pages/Pulpit"
 import Sesja from "@/pages/Sesja"
@@ -8,29 +8,29 @@ import ZadanieForm from "@/pages/ZadanieForm"
 import Zadania from "@/pages/Zadania"
 import { ThemeProvider } from "@/theme"
 
-// Wszystkie ekrany aplikacji (spec §6 „Trasy”)
-export function AppRoutes() {
-  return (
-    <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/" element={<Pulpit />} />
-        <Route path="/zadania" element={<Zadania />} />
-        <Route path="/zadania/nowe" element={<ZadanieForm />} />
-        <Route path="/zadania/:id/edycja" element={<ZadanieForm />} />
-        <Route path="/sesja" element={<Sesja />} />
-        <Route path="/statystyki" element={<Statystyki />} />
-        <Route path="/ustawienia" element={<Ustawienia />} />
-      </Route>
-    </Routes>
-  )
-}
+// Wszystkie ekrany aplikacji (spec §6 „Trasy”), wspólny układ z panelem bocznym.
+// „Data router” (createBrowserRouter) jest potrzebny do pytania o niezapisane zmiany (useBlocker).
+export const routes: RouteObject[] = [
+  {
+    element: <AppLayout />,
+    children: [
+      { path: "/", element: <Pulpit /> },
+      { path: "/zadania", element: <Zadania /> },
+      { path: "/zadania/nowe", element: <ZadanieForm /> },
+      { path: "/zadania/:id/edycja", element: <ZadanieForm /> },
+      { path: "/sesja", element: <Sesja /> },
+      { path: "/statystyki", element: <Statystyki /> },
+      { path: "/ustawienia", element: <Ustawienia /> },
+    ],
+  },
+]
+
+const router = createBrowserRouter(routes)
 
 export default function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </ThemeProvider>
   )
 }

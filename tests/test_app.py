@@ -1,21 +1,6 @@
-import pytest
 from fastapi.testclient import TestClient
 
 from main import create_app
-
-
-@pytest.fixture
-def app(tmp_path):
-    dist = tmp_path / "dist"
-    (dist / "assets").mkdir(parents=True)
-    (dist / "index.html").write_text('<div id="root"></div>', encoding="utf-8")
-    (dist / "assets" / "app.js").write_text("console.log(1)", encoding="utf-8")
-    return create_app(str(tmp_path / "test.db"), str(dist))
-
-
-@pytest.fixture
-def client(app):
-    return TestClient(app, base_url="http://127.0.0.1")
 
 
 def test_health(client):

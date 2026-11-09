@@ -61,5 +61,8 @@ def connect(path: str) -> sqlite3.Connection:
     con = sqlite3.connect(path)
     con.row_factory = sqlite3.Row                 # wiersze dostępne po nazwie kolumny
     con.execute("PRAGMA foreign_keys = ON")       # bez tego ON DELETE CASCADE nie działa
+    # lower() w SQLite zna tylko litery ASCII — pylower używa Pythona, więc „Ł” → „ł” też działa
+    con.create_function("pylower", 1, lambda text: text.lower() if isinstance(text, str) else text,
+                        deterministic=True)
     con.executescript(SCHEMA)
     return con

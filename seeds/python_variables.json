@@ -1,0 +1,316 @@
+[
+  {
+    "title": "Nazwa typu obiektu",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `nazwa_typu(x)`, która zwraca **nazwę typu obiektu** jako tekst, np. `\"int\"`, `\"str\"`, `\"NoneType\"`.\n\nPamiętaj: typ ma **obiekt**, a nie zmienna.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (2) A–B_",
+    "starter_code": "def nazwa_typu(x):\n    pass\n",
+    "hint": "type(x) zwraca klasę, np. <class 'int'>. Każda klasa ma atrybut __name__.",
+    "solution": "def nazwa_typu(x):\n    return type(x).__name__\n",
+    "tests": [
+      {
+        "input": "nazwa_typu(25)",
+        "expected": "\"int\""
+      },
+      {
+        "input": "nazwa_typu(10.99)",
+        "expected": "\"float\""
+      },
+      {
+        "input": "nazwa_typu(\"Mason\")",
+        "expected": "\"str\""
+      },
+      {
+        "input": "nazwa_typu(True)",
+        "expected": "\"bool\""
+      },
+      {
+        "input": "nazwa_typu(None)",
+        "expected": "\"NoneType\""
+      }
+    ]
+  },
+  {
+    "title": "Liczba całkowita, ale nie bool",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `czy_calkowita(x)`, która zwraca `True` tylko dla prawdziwych liczb całkowitych (`int`).\n\nUważaj: `isinstance(True, int)` zwraca `True`, bo **bool dziedziczy z int** — a `True` nie powinno być tu uznane za liczbę.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (2) C_",
+    "starter_code": "def czy_calkowita(x):\n    pass\n",
+    "hint": "Połącz dwa warunki: isinstance(x, int) oraz to, że x NIE jest bool.",
+    "solution": "def czy_calkowita(x):\n    return isinstance(x, int) and not isinstance(x, bool)\n",
+    "tests": [
+      {
+        "input": "czy_calkowita(5)",
+        "expected": "true"
+      },
+      {
+        "input": "czy_calkowita(-300)",
+        "expected": "true"
+      },
+      {
+        "input": "czy_calkowita(True)",
+        "expected": "false"
+      },
+      {
+        "input": "czy_calkowita(3.0)",
+        "expected": "false"
+      },
+      {
+        "input": "czy_calkowita(\"5\")",
+        "expected": "false"
+      }
+    ]
+  },
+  {
+    "title": "Bezpieczna konwersja na int",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `na_int(tekst)`, która zamienia tekst na liczbę całkowitą, a gdy się nie da — zwraca `None` (zamiast wysypać program).\n\nSprawdź, jak `int()` zachowuje się dla `\"3.9\"` i dla spacji wokół liczby.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (2) D_",
+    "starter_code": "def na_int(tekst):\n    pass\n",
+    "hint": "int(\"abc\") rzuca ValueError — złap go w try/except. int() sam ignoruje spacje na brzegach, ale nie przyjmuje \"3.9\".",
+    "solution": "def na_int(tekst):\n    try:\n        return int(tekst)\n    except ValueError:\n        return None\n",
+    "tests": [
+      {
+        "input": "na_int(\"42\")",
+        "expected": "42"
+      },
+      {
+        "input": "na_int(\" 7 \")",
+        "expected": "7"
+      },
+      {
+        "input": "na_int(\"abc\")",
+        "expected": "null"
+      },
+      {
+        "input": "na_int(\"3.9\")",
+        "expected": "null"
+      },
+      {
+        "input": "na_int(\"-15\")",
+        "expected": "-15"
+      }
+    ]
+  },
+  {
+    "title": "Tekst na wartość logiczną",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `tekst_na_bool(tekst)`, która zwraca `True` dla tekstów `\"true\"`, `\"1\"`, `\"tak\"` (bez względu na wielkość liter i spacje), a dla każdego innego tekstu `False`.\n\nDlaczego nie wystarczy `bool(tekst)`? Sprawdź, co zwraca `bool(\"False\")`.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (2) D — pułapki konwersji_",
+    "starter_code": "def tekst_na_bool(tekst):\n    pass\n",
+    "hint": "bool(\"False\") to True — każdy niepusty string jest prawdą. Zamiast tego porównaj tekst po .strip().lower() z listą dozwolonych wartości.",
+    "solution": "def tekst_na_bool(tekst):\n    return tekst.strip().lower() in (\"true\", \"1\", \"tak\")\n",
+    "tests": [
+      {
+        "input": "tekst_na_bool(\"True\")",
+        "expected": "true"
+      },
+      {
+        "input": "tekst_na_bool(\" TAK \")",
+        "expected": "true"
+      },
+      {
+        "input": "tekst_na_bool(\"1\")",
+        "expected": "true"
+      },
+      {
+        "input": "tekst_na_bool(\"False\")",
+        "expected": "false"
+      },
+      {
+        "input": "tekst_na_bool(\"\")",
+        "expected": "false"
+      }
+    ]
+  },
+  {
+    "title": "Zamiana wartości miejscami (swap)",
+    "language": "python",
+    "kind": "program",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Program wczytuje dwie linie: `a` i `b`. Zamień je miejscami **bez zmiennej pomocniczej** i wypisz w jednej linii: najpierw `a`, potem `b`, oddzielone spacją.\n\nPrzykład: wejście `10` i `20` → wyjście `20 10`.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (3) C_",
+    "starter_code": "a = input()\nb = input()\n\n# zamień a i b miejscami\n\nprint(a, b)\n",
+    "hint": "Wielokrotne przypisanie: po prawej stronie najpierw powstaje krotka (b, a), dopiero potem rozpakowuje się ją do a i b.",
+    "solution": "a = input()\nb = input()\n\na, b = b, a\n\nprint(a, b)\n",
+    "tests": [
+      {
+        "input": "10\n20",
+        "expected": "20 10"
+      },
+      {
+        "input": "kot\npies",
+        "expected": "pies kot"
+      },
+      {
+        "input": "1\n1",
+        "expected": "1 1"
+      }
+    ]
+  },
+  {
+    "title": "Niezależne listy",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `oddzielne_listy(n)`, która tworzy `n` **osobnych** pustych list, dodaje liczbę `1` tylko do **pierwszej** z nich i zwraca wszystkie listy.\n\nDla `n = 3` wynik to `[[1], [], []]`.\n\nCo się stanie, gdy listy utworzysz przez `[[]] * n` albo `a = b = []`?\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (3) D i (4)_",
+    "starter_code": "def oddzielne_listy(n):\n    pass\n",
+    "hint": "[[]] * n tworzy n nazw wskazujących na TEN SAM obiekt listy. Każda lista musi powstać osobno, np. w pętli: listy.append([]).",
+    "solution": "def oddzielne_listy(n):\n    listy = []\n    for i in range(n):\n        listy.append([])\n    listy[0].append(1)\n    return listy\n",
+    "tests": [
+      {
+        "input": "oddzielne_listy(3)",
+        "expected": "[[1], [], []]"
+      },
+      {
+        "input": "oddzielne_listy(1)",
+        "expected": "[[1]]"
+      },
+      {
+        "input": "oddzielne_listy(5)",
+        "expected": "[[1], [], [], [], []]"
+      }
+    ]
+  },
+  {
+    "title": "Dodaj bez psucia oryginału",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `dodaj_bezpiecznie(lista, x)`, która zwraca **nową** listę z dopisanym na końcu `x`, a listy przekazanej do funkcji **nie zmienia**.\n\nTest wywołuje funkcję i zwraca parę `[wynik, oryginał]` — oryginał musi zostać bez zmian.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (5) D–E (call by sharing)_",
+    "starter_code": "def dodaj_bezpiecznie(lista, x):\n    pass\n",
+    "hint": "Funkcja dostaje referencję do TEJ SAMEJ listy. Najpierw zrób kopię (lista.copy()), dopiero potem dopisuj.",
+    "solution": "def dodaj_bezpiecznie(lista, x):\n    nowa = lista.copy()\n    nowa.append(x)\n    return nowa\n",
+    "tests": [
+      {
+        "input": "(lambda l: [dodaj_bezpiecznie(l, 4), l])([1, 2, 3])",
+        "expected": "[[1, 2, 3, 4], [1, 2, 3]]"
+      },
+      {
+        "input": "(lambda l: [dodaj_bezpiecznie(l, \"a\"), l])([])",
+        "expected": "[[\"a\"], []]"
+      }
+    ]
+  },
+  {
+    "title": "Kopia płytka czy głęboka",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `pelna_kopia(lista)`, która zwraca **całkowicie niezależną** kopię listy zagnieżdżonej — zmiana wewnętrznej listy w oryginale nie może zmienić kopii.\n\nTest robi kopię, potem dopisuje `99` do `oryginał[0]` i sprawdza kopię.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (5) G_",
+    "starter_code": "def pelna_kopia(lista):\n    pass\n",
+    "hint": ".copy() to kopia płytka — wewnętrzne listy dalej są współdzielone. Użyj modułu copy i funkcji deepcopy().",
+    "solution": "import copy\n\ndef pelna_kopia(lista):\n    return copy.deepcopy(lista)\n",
+    "tests": [
+      {
+        "input": "(lambda o: [pelna_kopia(o), o[0].append(99)][0])([[1, 2], [3]])",
+        "expected": "[[1, 2], [3]]"
+      },
+      {
+        "input": "(lambda o: [pelna_kopia(o), o[1].append(\"x\")][0])([[], [\"a\"]])",
+        "expected": "[[], [\"a\"]]"
+      }
+    ]
+  },
+  {
+    "title": "is czy ==",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `porownaj(a, b)`, która zwraca:\n\n- `\"ten sam obiekt\"` — gdy `a` i `b` to **ten sam** obiekt w pamięci,\n- `\"rowne wartosci\"` — gdy to różne obiekty o tej samej wartości,\n- `\"rozne\"` — w pozostałych przypadkach.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (4) D–E_",
+    "starter_code": "def porownaj(a, b):\n    pass\n",
+    "hint": "is porównuje tożsamość (id), == porównuje wartości. Kolejność warunków ma znaczenie — najpierw sprawdź is.",
+    "solution": "def porownaj(a, b):\n    if a is b:\n        return \"ten sam obiekt\"\n    if a == b:\n        return \"rowne wartosci\"\n    return \"rozne\"\n",
+    "tests": [
+      {
+        "input": "(lambda x: porownaj(x, x))([1, 2, 3])",
+        "expected": "\"ten sam obiekt\""
+      },
+      {
+        "input": "porownaj([1, 2, 3], [1, 2, 3])",
+        "expected": "\"rowne wartosci\""
+      },
+      {
+        "input": "porownaj([1], [2])",
+        "expected": "\"rozne\""
+      },
+      {
+        "input": "porownaj(None, None)",
+        "expected": "\"ten sam obiekt\""
+      }
+    ]
+  },
+  {
+    "title": "Poprawna nazwa zmiennej",
+    "language": "python",
+    "kind": "function",
+    "difficulty": "easy",
+    "tags": [
+      "Zmienne"
+    ],
+    "description": "Napisz funkcję `czy_poprawna_nazwa(nazwa)`, która zwraca `True`, jeśli tekst może być nazwą zmiennej w Pythonie (zgodnie z **regułami składni**, nie konwencjami PEP 8).\n\nNazwa nie może zaczynać się od cyfry, zawierać `-` ani spacji, ani być słowem kluczowym.\n\n_Notatka: PYTHON — VARIABLES, SUBJECT (7) A_",
+    "starter_code": "def czy_poprawna_nazwa(nazwa):\n    pass\n",
+    "hint": "str ma metodę isidentifier(). Słowa kluczowe sprawdzisz modułem keyword: keyword.iskeyword(nazwa).",
+    "solution": "import keyword\n\ndef czy_poprawna_nazwa(nazwa):\n    return nazwa.isidentifier() and not keyword.iskeyword(nazwa)\n",
+    "tests": [
+      {
+        "input": "czy_poprawna_nazwa(\"user_age\")",
+        "expected": "true"
+      },
+      {
+        "input": "czy_poprawna_nazwa(\"_user_age\")",
+        "expected": "true"
+      },
+      {
+        "input": "czy_poprawna_nazwa(\"class_\")",
+        "expected": "true"
+      },
+      {
+        "input": "czy_poprawna_nazwa(\"1_name\")",
+        "expected": "false"
+      },
+      {
+        "input": "czy_poprawna_nazwa(\"my-var\")",
+        "expected": "false"
+      },
+      {
+        "input": "czy_poprawna_nazwa(\"my var\")",
+        "expected": "false"
+      },
+      {
+        "input": "czy_poprawna_nazwa(\"class\")",
+        "expected": "false"
+      }
+    ]
+  }
+]
