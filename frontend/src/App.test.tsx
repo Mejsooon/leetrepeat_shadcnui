@@ -10,7 +10,7 @@ it.each([
   ["/zadania", "Twoje zadania"],
   ["/zadania/nowe", "Dodaj zadanie"],
   ["/zadania/5/edycja", "Edytuj zadanie"],
-  ["/sesja", "Powtórka"],
+  ["/sesja?zadanie=5", "Two Sum"],
   ["/statystyki", "Statystyki"],
   ["/ustawienia", "Ustawienia"],
 ])("trasa %s pokazuje ekran %s", async (path, heading) => {
