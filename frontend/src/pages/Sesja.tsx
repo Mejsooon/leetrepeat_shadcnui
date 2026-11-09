@@ -49,6 +49,9 @@ export default function Sesja() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // Najnowszy kod bez czekania na przerysowanie: Monaco zgłasza zmianę i Ctrl+Enter poza Reactem,
+  // więc run() w starym domknięciu widziałby jeszcze poprzedni `code`
+  const codeRef = useRef("")
   const savingRef = useRef(false)                                    // blokada podwójnego zapisu oceny
   const runningRef = useRef(false)                                   // blokada podwójnego uruchomienia (stan Reacta jest asynchroniczny)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -79,6 +82,7 @@ export default function Sesja() {
         if (cancelled) return
         setTask(t)
         setCode(t.starter_code)
+        codeRef.current = t.starter_code
         setNotes(t.notes)
         setLastRun(null)
         setRunError(null)
@@ -148,7 +152,7 @@ export default function Sesja() {
     setRunning(true)
     setRunError(null)
     try {
-      const response = await runTests({ language: task.language, kind: task.kind, code, tests: task.tests })
+      const response = await runTests({ language: task.language, kind: task.kind, code: codeRef.current, tests: task.tests })
       setLastRun(response)
       setRunKey((k) => k + 1)
     } catch (error) {
@@ -274,7 +278,10 @@ export default function Sesja() {
         <SolvePanel
           task={task}
           code={code}
-          onCodeChange={setCode}
+          onCodeChange={(value) => {
+            codeRef.current = value
+            setCode(value)
+          }}
           running={running}
           lastRun={lastRun}
           runKey={runKey}
