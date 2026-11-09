@@ -14,7 +14,7 @@ it("request zwraca JSON przy 200", async () => {
 it("request rzuca ApiError(404, detail) przy 404", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
     new Response(JSON.stringify({ detail: "Nie ma zadania" }), { status: 404 })))
-  const error = await request("/tasks/9").catch((e: ApiError) => e)
+  const error = (await request("/tasks/9").catch((e) => e)) as ApiError
   expect(error).toBeInstanceOf(ApiError)
   expect(error.status).toBe(404)
   expect(error.message).toBe("Nie ma zadania")
@@ -22,7 +22,7 @@ it("request rzuca ApiError(404, detail) przy 404", async () => {
 
 it("request rzuca ApiError(0) gdy fetch odrzuca", async () => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
-  const error = await request("/health").catch((e: ApiError) => e)
+  const error = (await request("/health").catch((e) => e)) as ApiError
   expect(error).toBeInstanceOf(ApiError)
   expect(error.status).toBe(0)
   expect(error.message).toBe("Brak połączenia")
