@@ -64,7 +64,29 @@ python main.py
 Otwórz **http://127.0.0.1:8000**. Serwer zatrzymujesz przez `Ctrl+C`.
 
 Serwer nasłuchuje tylko na `127.0.0.1` i przyjmuje wyłącznie adresy `127.0.0.1` / `localhost` — nikt z sieci
-ani obca strona internetowa nie może wysłać Ci kodu do wykonania.
+ani obca strona internetowa nie może wysłać Ci kodu do wykonania. Dodatkowo każde żądanie zmieniające dane
+(w tym uruchomienie testów) przysłane z innej strony w przeglądarce (nagłówki `Origin` / `Sec-Fetch-Site`)
+dostaje 403.
+
+## Sesja i skróty
+
+„Powtórka” prowadzi przez kolejkę: najpierw zadania do powtórki (najstarszy termin), potem nowe.
+Kod uruchamia się lokalnie na Twoim komputerze. Po rozwiązaniu oceniasz, jak łatwo było odtworzyć rozwiązanie:
+
+| Ocena | Nowe zadanie | Kolejne powtórki |
+|---|---|---|
+| Znowu | dziś, wraca na koniec sesji | dziś, wraca na koniec sesji |
+| Trudne | za 1 dzień | odstęp × 1,2 (co najmniej +1 dzień) |
+| Dobre | za 3 dni | odstęp × 2,5 |
+| Łatwe | za 7 dni | odstęp × 3,5 |
+
+| Skrót | Działanie |
+|---|---|
+| `Ctrl/⌘ + Enter` | uruchom testy (także w edytorze) |
+| `1`–`4` | wybór oceny (Znowu / Trudne / Dobre / Łatwe) |
+| `Ctrl/⌘ + K` | wyszukiwarka zadań w bibliotece |
+
+Kliknięcie tytułu w bibliotece otwiera sesję z jednym zadaniem. Notatki zapisują się same sekundę po pisaniu.
 
 ## Dane
 

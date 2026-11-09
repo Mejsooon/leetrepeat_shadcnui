@@ -6,6 +6,8 @@ const python = process.env.PYTHON ?? (process.platform === "win32" ? "py" : "pyt
 
 export default defineConfig({
   testDir: "./e2e",
+  // Jeden serwer i jedna baza dla wszystkich plików — testy po kolei, żeby nie widziały cudzych zadań
+  workers: 1,
   use: {
     baseURL: "http://127.0.0.1:8000",
     launchOptions: process.env.PW_CHROME ? { executablePath: process.env.PW_CHROME } : {},
