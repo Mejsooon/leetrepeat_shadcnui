@@ -6,9 +6,8 @@ sama planuje kolejną powtórkę.
 
 Działa lokalnie na Twoim komputerze (`http://127.0.0.1:8000`), bez internetu i bez kont.
 
-> Stan: **Etap 2 — zadania**: biblioteka z wyszukiwarką, filtrami i paginacją, dodawanie / edycja / usuwanie
-> zadań (tagi, trudność, testy, edytor kodu), import ze starej wersji. Pulpit, sesja powtórek, statystyki
-> i ustawienia dojdą w kolejnych etapach — plany w `docs/superpowers/`.
+> Stan: **wszystkie 5 etapów gotowe** — biblioteka zadań, sesja powtórek z testami i oceną, Pulpit,
+> Statystyki i Ustawienia (środowisko, limity, kopia zapasowa). Spec i plany w `docs/superpowers/`.
 > Poprzednia wersja: [Mejsooon/leetrepeat](https://github.com/Mejsooon/leetrepeat) (archiwum).
 
 ## Wymagania
@@ -95,6 +94,25 @@ Kliknięcie tytułu w bibliotece otwiera sesję z jednym zadaniem. Notatki zapis
 - **Skuteczność** — udane powtórki (Trudne, Dobre, Łatwe) / wszystkie oceny w okresie. „Znowu” to ponowna nauka.
 - **Utrwalone** — zadania z odstępem co najmniej 21 dni.
 - **Statystyki** domyślnie za ostatnie 14 dni; okres zmienisz listą albo adresem `/statystyki?dni=7|14|30|90`.
+
+## Ustawienia i kopia zapasowa
+
+**Środowisko.** Ekran Ustawienia pokazuje, czy aplikacja widzi Pythona i .NET („Wykryto” + wersja albo
+„Nie wykryto”). Gdy czegoś brakuje, zadania w tym języku mają w bibliotece plakietkę „Niedostępne”.
+
+- Domyślny Python to pierwszy działający z `python3`, `py`, `python` (fałszywy skrót `python3` ze Sklepu
+  Windows jest pomijany). .NET domyślnie to `dotnet` z `PATH`.
+- Własną ścieżkę wpisujesz w polu „Ścieżka do programu”, np. `C:\Program Files\dotnet\dotnet.exe`
+  albo `/home/ty/.dotnet/dotnet`, potem „Zapisz” i „Sprawdź ponownie”.
+- Limit czasu (1–300 s) dotyczy jednego uruchomienia testów. Domyślnie Python 5 s, C# 20 s (pierwsza
+  kompilacja C# trwa kilka sekund).
+
+**Kopia zapasowa.** Wszystko (zadania, testy, historia ocen, ustawienia) jest w jednym pliku `leetrepeat.db`.
+
+- „Pobierz kopię” zapisuje plik `leetrepeat-RRRR-MM-DD.db` w Pobranych.
+- „Wybierz plik…” przywraca bazę z takiego pliku. Aplikacja najpierw sprawdza, czy to naprawdę baza
+  LeetRepeat — jeśli nie, nic się nie zmienia. Przed podmianą zapisuje obecną bazę obok, jako
+  `leetrepeat.db.przed-przywroceniem-RRRRMMDD-GGMMSS.db`, więc zawsze możesz wrócić.
 
 ## Dane
 

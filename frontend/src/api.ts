@@ -217,3 +217,30 @@ export function getDashboard(): Promise<Dashboard> {
 export function getStats(from: string, to: string): Promise<Stats> {
   return request<Stats>(`/stats?from=${from}&to=${to}`)
 }
+
+// --- Ustawienia i kopia zapasowa (Etap 5) ---
+
+export type SettingsValues = { python_path: string; dotnet_path: string; python_timeout_s: number; csharp_timeout_s: number }
+export type DatabaseInfo = { path: string; task_count: number; last_backup_at: string | null }
+export type SettingsResponse = { values: SettingsValues; defaults: SettingsValues; database: DatabaseInfo }
+export type RuntimeInfo = { found: boolean; version: string | null; path: string }
+export type Runtimes = { python: RuntimeInfo; dotnet: RuntimeInfo }
+
+export const BACKUP_URL = "/api/backup"
+
+export function getSettings(): Promise<SettingsResponse> {
+  return request<SettingsResponse>("/settings")
+}
+
+export function saveSettings(values: SettingsValues): Promise<SettingsResponse> {
+  return request<SettingsResponse>("/settings", { method: "PUT", body: JSON.stringify(values) })
+}
+
+export function getRuntimes(): Promise<Runtimes> {
+  return request<Runtimes>("/settings/runtimes")
+}
+
+// Plik idzie jako surowe ciało żądania (bez formularza multipart)
+export function restoreBackup(file: Blob): Promise<{ tasks: number; backup_path: string }> {
+  return request("/backup/restore", { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } })
+}
