@@ -14,7 +14,7 @@ const RUNTIMES = {
   dotnet: { found: false, version: null, path: "dotnet" },
 }
 
-type Overrides = { settings?: unknown; runtimes?: unknown; restore?: Response }
+type Overrides = { settings?: unknown; runtimes?: unknown; restore?: Response; afterRestore?: unknown }
 
 // Atrapa API Ustawień; PUT odsyła zapisane wartości
 function stubSettings(overrides: Overrides = {}) {
@@ -28,6 +28,7 @@ function stubSettings(overrides: Overrides = {}) {
     }
     if (url === "/api/settings") return json(current)
     if (url === "/api/settings/runtimes") return json(overrides.runtimes ?? RUNTIMES)
+    if (url === "/api/backup/restore" && overrides.afterRestore) current = overrides.afterRestore as typeof SETTINGS
     if (url === "/api/backup/restore") return overrides.restore ?? json({ tasks: 3, backup_path: "/home/m/leetrepeat/leetrepeat.db.przed-przywroceniem-20261109-120000.db" })
     if (url === "/api/health") return json({ status: "ok", version: "3.0.0" })
     return json({ library_count: 24, streak: 0 })
@@ -153,4 +154,17 @@ it("zły plik pokazuje błąd", async () => {
   expect(await screen.findByText("Nie udało się przywrócić bazy")).toBeInTheDocument()
   expect(screen.getByText(/To nie jest plik bazy danych/)).toBeInTheDocument()
   expect(screen.getByText(/Obecne dane są nietknięte\./)).toBeInTheDocument()
+})
+
+it("po przywróceniu formularz pokazuje ustawienia z przywróconej bazy", async () => {   // przegląd końcowy
+  const restored = { ...SETTINGS, values: { ...VALUES, python_path: "C:\\Python312\\python.exe", python_timeout_s: 8 } }
+  const fetchMock = stubSettings({ afterRestore: restored })
+  renderApp("/ustawienia")
+  await userEvent.upload(await screen.findByLabelText("Plik kopii bazy"), new File(["x"], "kopia.db"))
+  await userEvent.click(await screen.findByRole("button", { name: "Przywróć" }))
+  await screen.findByText(/Przywrócono bazę/)
+  await waitFor(() => expect(screen.getByLabelText("Ścieżka do Pythona")).toHaveValue("C:\\Python312\\python.exe"))
+  expect(screen.getByLabelText("Limit czasu Pythona")).toHaveValue(8)
+  expect(screen.getByRole("button", { name: "Zapisz" })).toBeDisabled()          // to zapisane wartości, nie zmiany
+  expect(calls(fetchMock, "GET", "/api/settings/runtimes").length).toBeGreaterThanOrEqual(2)
 })

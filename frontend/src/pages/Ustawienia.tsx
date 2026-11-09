@@ -123,7 +123,15 @@ export default function Ustawienia() {
         ok: true,
         text: `Przywrócono bazę: ${plural(result.tasks, "zadanie", "zadania", "zadań")}. Poprzednia baza: ${result.backup_path}`,
       })
-      refreshDatabaseInfo()
+      // Przywrócona baza ma własne ścieżki i limity — formularz i stan środowiska bierzemy od nowa
+      // (niezapisane zmiany dotyczyły starej bazy, więc przepadają)
+      getSettings()
+        .then((s) => {
+          setSettings(s)
+          setForm(toForm(s.values))
+        })
+        .catch(() => {})
+      loadRuntimes()
     } catch (e) {
       setRestoreResult({ ok: false, text: e instanceof ApiError ? e.message : "Brak połączenia z aplikacją" })
     }

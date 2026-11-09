@@ -146,3 +146,21 @@ def test_settings_database_info(client):
     assert database["task_count"] == 1
     assert database["path"].endswith("test.db")
     assert database["last_backup_at"] is None
+
+
+@pytest.mark.parametrize("folder", ["C#projekty", "a%20b", "pyt?anie"])
+def test_restore_in_folder_with_special_chars(tmp_path, folder):   # przegląd końcowy: ścieżka czytana jako URI
+    from fastapi.testclient import TestClient
+    from main import create_app
+    db_dir = tmp_path / folder
+    db_dir.mkdir()
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text('<div id="root"></div>', encoding="utf-8")
+    special = TestClient(create_app(str(db_dir / "leetrepeat.db"), str(dist)), base_url="http://127.0.0.1")
+    special.post("/api/tasks", json=TASK)
+    data = download(special)
+    response = restore(special, data)
+    assert response.status_code == 200, response.text
+    assert response.json()["tasks"] == 1
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([folder, "dist"])   # nic nie powstało poza folderem bazy

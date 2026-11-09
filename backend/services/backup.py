@@ -36,7 +36,9 @@ def validate(path: str) -> str | None:
         if f.read(16) != SQLITE_HEADER:
             return "To nie jest plik bazy danych"
     try:
-        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        # Zwykłe otwarcie, nie URI: „file:…” psuje ścieżki z #, ? i %xx (np. folder „C#projekty”).
+        # To nasz własny plik tymczasowy, więc tryb tylko-do-odczytu nie jest potrzebny.
+        con = sqlite3.connect(path)
         try:
             check = con.execute("PRAGMA integrity_check").fetchone()[0]
             if check != "ok":
