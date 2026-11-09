@@ -75,3 +75,27 @@ class ReviewIn(BaseModel):
         if self.tests_passed is not None and self.tests_passed > self.tests_total:
             raise ValueError("Nieprawidłowa liczba testów")
         return self
+
+
+class SettingsIn(BaseModel):
+    python_path: str
+    dotnet_path: str
+    python_timeout_s: int
+    csharp_timeout_s: int
+
+    @field_validator("python_path", "dotnet_path")
+    @classmethod
+    def path_ok(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Pole nie może być puste")
+        if len(value) > 500:
+            raise ValueError("Ścieżka może mieć najwyżej 500 znaków")
+        return value
+
+    @field_validator("python_timeout_s", "csharp_timeout_s")
+    @classmethod
+    def timeout_ok(cls, value: int) -> int:
+        if not 1 <= value <= 300:
+            raise ValueError("Limit musi być od 1 do 300 sekund")
+        return value
