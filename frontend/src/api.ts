@@ -137,3 +137,37 @@ export function updateNotes(id: number, notes: string): Promise<{ ok: boolean }>
 export function listTags(): Promise<Tag[]> {
   return request<Tag[]>("/tags")
 }
+
+// --- Sesja (Etap 3) ---
+
+export type Rating = "again" | "hard" | "good" | "easy"
+export type RunStatus = "pass" | "fail" | "error" | "timeout"
+export type RunResult = { status: RunStatus; input: string; expected: string; actual: string | null; message: string | null }
+export type RunResponse = { results: RunResult[]; duration_ms: number }
+export type RunInput = { language: Language; kind: Kind; code: string; tests: TestCase[] }
+export type SessionItem = { id: number; title: string; language: Language; difficulty: Difficulty; tags: string[]; status: Status }
+export type ReviewPreviewItem = { rating: Rating; interval_days: number; due_date: string }
+export type ReviewInput = {
+  rating: Rating
+  duration_seconds: number
+  tests_passed: number | null
+  tests_total: number | null
+  hint_used: boolean
+  solution_used: boolean
+}
+
+export function getSession(language?: Language): Promise<SessionItem[]> {
+  return request<SessionItem[]>("/session" + (language ? `?language=${language}` : ""))
+}
+
+export function runTests(input: RunInput): Promise<RunResponse> {
+  return request<RunResponse>("/run", { method: "POST", body: JSON.stringify(input) })
+}
+
+export function getReviewPreview(id: number): Promise<ReviewPreviewItem[]> {
+  return request<ReviewPreviewItem[]>(`/tasks/${id}/review-preview`)
+}
+
+export function submitReview(id: number, input: ReviewInput): Promise<{ interval_days: number; due_date: string }> {
+  return request(`/tasks/${id}/review`, { method: "POST", body: JSON.stringify(input) })
+}
