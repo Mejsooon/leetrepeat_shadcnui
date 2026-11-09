@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.superpowers/
+
+# LeetRepeat
+leetrepeat.db
+*.db-journal
+node_modules/
+!frontend/dist/
+!frontend/dist/**
+e2e-test.db
