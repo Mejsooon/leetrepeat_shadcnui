@@ -1,12 +1,17 @@
 import { render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
 import { AppRoutes } from "@/App"
+import { mockMatchMedia } from "@/test/matchMedia"
+import { ThemeProvider } from "@/theme"
 
 function renderAt(path: string) {
+  mockMatchMedia(false)
   render(
-    <MemoryRouter initialEntries={[path]}>
-      <AppRoutes />
-    </MemoryRouter>,
+    <ThemeProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <AppRoutes />
+      </MemoryRouter>
+    </ThemeProvider>,
   )
 }
 
