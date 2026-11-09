@@ -25,7 +25,15 @@ export default function CodeEditorMonaco(props: CodeEditorProps & { height: numb
       onChange={(value) => props.onChange(value ?? "")}
       theme={resolved === "dark" ? "vs-dark" : "vs"}
       onMount={(editor) => {
-        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onCtrlEnter.current?.())
+        // Skrót tylko dla TEGO edytora. editor.addCommand rejestruje go globalnie dla wszystkich
+        // edytorów na stronie (wygrywa ostatni) — edytor z rozwiązaniem przejmowałby Ctrl+Enter.
+        // Nasłuch znika razem z edytorem. Bez onCtrlEnter zdarzenie idzie dalej (np. do strony).
+        editor.onKeyDown((e) => {
+          if (!onCtrlEnter.current || !(e.ctrlKey || e.metaKey) || e.keyCode !== monaco.KeyCode.Enter) return
+          e.preventDefault()
+          e.stopPropagation()
+          onCtrlEnter.current()
+        })
       }}
       options={{
         ariaLabel: props.ariaLabel,

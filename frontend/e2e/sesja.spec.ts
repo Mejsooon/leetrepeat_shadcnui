@@ -25,6 +25,10 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByRole("heading", { level: 1, name: `Suma ${theme}` })).toBeVisible()
     await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark)/)
 
+    // Drugi (tylko do odczytu) edytor z rozwiązaniem nie może przejąć skrótu Ctrl+Enter
+    await page.getByRole("button", { name: "Pokaż rozwiązanie" }).click()
+    await expect(page.locator(".monaco-editor")).toHaveCount(2)
+
     // Kod w prawdziwym Monaco: zaznacz wszystko i wklej (insertText omija automatyczne wcięcia)
     const editor = page.locator(".monaco-editor").first()
     await expect(editor).toBeVisible()

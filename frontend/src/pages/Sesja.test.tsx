@@ -271,3 +271,18 @@ it("koniec sesji", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Wróć na Pulpit" }))
   await waitFor(() => expect(router.state.location.pathname).toBe("/"))
 })
+
+it("trwające testy blokują przejście do oceny", async () => {           // przegląd końcowy, Important 1
+  let release: () => void = () => {}
+  stubSession({
+    "POST /api/run": () => new Promise((resolve) => { release = () => resolve(PASS) }),
+  })
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  fireEvent.click(screen.getByRole("button", { name: /Uruchom testy/ }))
+  // Wynik zadania A nie może trafić do zadania B — w trakcie testów nie da się przejść dalej
+  expect(screen.getByRole("button", { name: "Przejdź do oceny" })).toBeDisabled()
+  act(() => release())
+  await screen.findByText("Wszystkie testy przeszły")
+  expect(screen.getByRole("button", { name: "Przejdź do oceny" })).toBeEnabled()
+})

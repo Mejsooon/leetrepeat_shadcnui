@@ -149,7 +149,7 @@ export function SolvePanel(props: Props) {
             {!allPassed && props.lastRun && (
               <span className="text-xs text-muted-foreground">Popraw kod i uruchom testy ponownie.</span>
             )}
-            <Button variant={allPassed ? "default" : "outline"} onClick={props.onRate}>
+            <Button variant={allPassed ? "default" : "outline"} onClick={props.onRate} disabled={props.running}>
               Przejdź do oceny
             </Button>
           </div>

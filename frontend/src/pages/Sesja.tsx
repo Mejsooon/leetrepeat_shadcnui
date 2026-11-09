@@ -178,6 +178,8 @@ export default function Sesja() {
   }, [phase])
 
   function goToRating() {
+    // W trakcie testów nie przechodzimy dalej — wynik zadania A trafiłby do zadania B
+    if (runningRef.current) return
     saveNotes()
     setRatedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
     setPhase("rate")
