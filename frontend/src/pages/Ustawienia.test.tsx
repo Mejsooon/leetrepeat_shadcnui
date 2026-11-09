@@ -168,3 +168,24 @@ it("po przywróceniu formularz pokazuje ustawienia z przywróconej bazy", async 
   expect(screen.getByRole("button", { name: "Zapisz" })).toBeDisabled()          // to zapisane wartości, nie zmiany
   expect(calls(fetchMock, "GET", "/api/settings/runtimes").length).toBeGreaterThanOrEqual(2)
 })
+
+// --- Etap 6 ---
+
+it("Escape w Ustawieniach", async () => {
+  stubSettings()
+  const { router } = renderApp("/ustawienia")
+  fireEvent.change(await screen.findByLabelText("Limit czasu Pythona"), { target: { value: "7" } })
+  await userEvent.click(screen.getByRole("link", { name: /Zadania/ }))
+  expect(await screen.findByText("Opuścić stronę?")).toBeInTheDocument()
+  await userEvent.keyboard("{Escape}")
+  await waitFor(() => expect(screen.queryByText("Opuścić stronę?")).not.toBeInTheDocument())
+  expect(router.state.location.pathname).toBe("/ustawienia")
+})
+
+it("za długa ścieżka", async () => {
+  stubSettings()
+  renderApp("/ustawienia")
+  fireEvent.change(await screen.findByLabelText("Ścieżka do Pythona"), { target: { value: "x".repeat(501) } })
+  expect(screen.getByText("Ścieżka może mieć najwyżej 500 znaków")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Zapisz" })).toBeDisabled()
+})

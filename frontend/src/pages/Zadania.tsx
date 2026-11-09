@@ -45,7 +45,9 @@ export default function Zadania() {
   const [search, setSearch] = useState(params.get("q") ?? "")
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const page = Number(params.get("page") ?? "1") || 1
+  // Numer strony z adresu: tylko dodatnia liczba całkowita, inaczej 1 (np. ?page=abc)
+  const pageParam = params.get("page") ?? ""
+  const page = /^[1-9]\d*$/.test(pageParam) ? Number(pageParam) : 1
   const query = params.toString()
 
   // Ustawienie jednego filtra w adresie; każda zmiana filtra wraca na stronę 1
@@ -70,7 +72,7 @@ export default function Zadania() {
       difficulty: (p.get("difficulty") as never) ?? undefined,
       status: (p.get("status") as never) ?? undefined,
       tag: p.get("tag") ?? undefined,
-      page: p.get("page") ? Number(p.get("page")) : undefined,
+      page: /^[1-9]\d*$/.test(p.get("page") ?? "") ? Number(p.get("page")) : 1,
     })
       .then((list) => {
         if (cancelled) return

@@ -29,7 +29,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (response.ok) throw new ApiError(response.status, "Nieprawidłowa odpowiedź serwera")
   }
   if (!response.ok) {
-    const detail = typeof data?.detail === "string" ? data.detail : `Błąd ${response.status}`
+    // detail to tekst; lista (stary format Pydantica) → pierwszy komunikat
+    let detail = `Błąd ${response.status}`
+    if (typeof data?.detail === "string") detail = data.detail
+    else if (Array.isArray(data?.detail) && typeof data.detail[0]?.msg === "string") detail = data.detail[0].msg
     throw new ApiError(response.status, detail)
   }
   return data as T

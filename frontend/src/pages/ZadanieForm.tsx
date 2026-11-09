@@ -41,6 +41,11 @@ export default function ZadanieForm() {
   const [loadError, setLoadError] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
+  // Stałe id wierszy testów (tylko w formularzu, nie idą do API) — „ruszone pole” i komunikat zostają
+  // przy właściwym teście po usunięciu innego
+  const nextTestId = useRef(1)
+  const [testIds, setTestIds] = useState<number[]>([0])
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [preview, setPreview] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -60,6 +65,7 @@ export default function ZadanieForm() {
         }
         setInitial(loaded)
         setForm(loaded)
+        setTestIds(loaded.tests.map(() => nextTestId.current++))
       })
       .catch((error) => {
         // 404 = zadania nie ma; inny błąd (np. serwer nie działa) — nie pokazujemy pustego formularza,
@@ -118,7 +124,7 @@ export default function ZadanieForm() {
 
   function setTest(index: number, key: "input" | "expected", value: string) {
     setForm((f) => ({ ...f, tests: f.tests.map((t, i) => (i === index ? { ...t, [key]: value } : t)) }))
-    setTouched((t) => ({ ...t, [`test-${index}`]: true }))
+    setTouched((t) => ({ ...t, [`test-${testIds[index]}`]: true }))
   }
 
   // B / I: owija zaznaczony tekst treści znacznikami Markdown
@@ -149,7 +155,13 @@ export default function ZadanieForm() {
 
   async function remove() {
     if (taskId === null) return
-    await deleteTask(taskId)
+    setDeleteError(null)
+    try {
+      await deleteTask(taskId)
+    } catch (error) {
+      setDeleteError(error instanceof ApiError ? error.message : "Brak połączenia z aplikacją")
+      return
+    }
     leaving.current = true
     navigate("/zadania")
   }
@@ -324,7 +336,7 @@ export default function ZadanieForm() {
               </div>
               <ol className="flex flex-col gap-2">
                 {form.tests.map((test, i) => (
-                  <li key={i} className="flex flex-col gap-1">
+                  <li key={testIds[i] ?? `extra-${i}`} className="flex flex-col gap-1">
                     <div className="flex items-start gap-2">
                       <span className="mt-2 w-5 text-right text-xs text-muted-foreground tabular-nums">{i + 1}</span>
                       <Input aria-label={`${testLabels[0]} – test ${i + 1}`} placeholder={testLabels[0]} value={test.input}
@@ -333,18 +345,24 @@ export default function ZadanieForm() {
                         onChange={(e) => setTest(i, "expected", e.target.value)} className="font-mono text-[13px]" />
                       <Button type="button" variant="ghost" size="icon" aria-label={`Usuń test ${i + 1}`}
                         disabled={form.tests.length === 1}
-                        onClick={() => set("tests", form.tests.filter((_, j) => j !== i))}>
+                        onClick={() => {
+                          set("tests", form.tests.filter((_, j) => j !== i))
+                          setTestIds((ids) => ids.filter((_, j) => j !== i))
+                        }}>
                         <X aria-hidden="true" />
                       </Button>
                     </div>
-                    {show(`test-${i}`) && errors.testInputs[i] && (
+                    {show(`test-${testIds[i]}`) && errors.testInputs[i] && (
                       <p className="pl-7 text-xs text-destructive">{errors.testInputs[i]}</p>
                     )}
                   </li>
                 ))}
               </ol>
               <Button type="button" variant="outline" size="sm" className="self-start"
-                onClick={() => set("tests", [...form.tests, { input: "", expected: "" }])}>
+                onClick={() => {
+                  set("tests", [...form.tests, { input: "", expected: "" }])
+                  setTestIds((ids) => [...ids, nextTestId.current++])
+                }}>
                 <Plus aria-hidden="true" />
                 Dodaj test
               </Button>
@@ -370,6 +388,14 @@ export default function ZadanieForm() {
         <Alert variant="destructive">
           <CircleAlert aria-hidden="true" />
           <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
+
+      {deleteError && (
+        <Alert variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>Nie udało się usunąć zadania</AlertTitle>
+          <AlertDescription>{deleteError}</AlertDescription>
         </Alert>
       )}
 
@@ -407,7 +433,8 @@ export default function ZadanieForm() {
         </Button>
       </div>
 
-      <AlertDialog open={blocker.state === "blocked"}>
+      {/* Escape albo klik obok okna = „Zostań” */}
+      <AlertDialog open={blocker.state === "blocked"} onOpenChange={(open) => { if (!open) blocker.reset?.() }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Opuścić stronę?</AlertDialogTitle>

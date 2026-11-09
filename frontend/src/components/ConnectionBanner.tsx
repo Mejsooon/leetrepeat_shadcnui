@@ -15,8 +15,8 @@ export function ConnectionBanner() {
       await getHealth()
       setOffline(false)
     } catch (error) {
-      // Tylko brak połączenia (status 0) — inne błędy obsługują same ekrany
-      setOffline(error instanceof ApiError && error.status === 0)
+      // Brak połączenia (0) albo serwer deweloperski Vite bez backendu (502–504) — inne błędy obsługują ekrany
+      setOffline(error instanceof ApiError && (error.status === 0 || (error.status >= 502 && error.status <= 504)))
     }
     setChecking(false)
   }

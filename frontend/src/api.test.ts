@@ -42,3 +42,10 @@ it("request rzuca ApiError(500) gdy odpowiedź błędu nie jest JSON-em", async 
   expect(error.status).toBe(500)
   expect(error.message).toBe("Błąd 500")
 })
+
+it("detail jako lista daje pierwszy komunikat", async () => {        // Etap 6: zapas na stary format 422
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ detail: [{ msg: "Pole nie może być puste" }] }), { status: 422 })))
+  const error = (await request("/tasks").catch((e) => e)) as ApiError
+  expect(error.message).toBe("Pole nie może być puste")
+})
