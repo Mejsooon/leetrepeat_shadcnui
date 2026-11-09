@@ -113,3 +113,44 @@ it("zapis bez zmian jest nieaktywny", async () => {
   await screen.findByLabelText("Limit czasu Pythona")
   expect(screen.getByRole("button", { name: "Zapisz" })).toBeDisabled()
 })
+
+// --- Kopia zapasowa (Task 4) ---
+
+it("informacje o bazie", async () => {
+  stubSettings()
+  renderApp("/ustawienia")
+  expect(await screen.findByText("/home/m/leetrepeat/leetrepeat.db")).toBeInTheDocument()
+  expect(screen.getByText("24 zadania · ostatnia kopia: nigdy")).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: /Pobierz kopię/ })).toHaveAttribute("href", "/api/backup")
+})
+
+it("przywracanie z potwierdzeniem", async () => {
+  const fetchMock = stubSettings()
+  renderApp("/ustawienia")
+  const input = await screen.findByLabelText("Plik kopii bazy")
+  await userEvent.upload(input, new File(["x"], "kopia.db"))
+  expect(await screen.findByText("Przywrócić bazę z pliku kopia.db?")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Przywróć" }))
+  expect(await screen.findByText(/Przywrócono bazę: 3 zadania\./)).toBeInTheDocument()
+  const post = calls(fetchMock, "POST", "/api/backup/restore")
+  expect(post).toHaveLength(1)
+  expect((post[0][1]?.headers as Record<string, string>)["Content-Type"]).toBe("application/octet-stream")
+})
+
+it("anulowanie nie wysyła pliku", async () => {
+  const fetchMock = stubSettings()
+  renderApp("/ustawienia")
+  await userEvent.upload(await screen.findByLabelText("Plik kopii bazy"), new File(["x"], "kopia.db"))
+  await userEvent.click(await screen.findByRole("button", { name: "Anuluj" }))
+  expect(calls(fetchMock, "POST", "/api/backup/restore")).toHaveLength(0)
+})
+
+it("zły plik pokazuje błąd", async () => {
+  stubSettings({ restore: new Response(JSON.stringify({ detail: "To nie jest plik bazy danych" }), { status: 409 }) })
+  renderApp("/ustawienia")
+  await userEvent.upload(await screen.findByLabelText("Plik kopii bazy"), new File(["x"], "zdjecie.db"))
+  await userEvent.click(await screen.findByRole("button", { name: "Przywróć" }))
+  expect(await screen.findByText("Nie udało się przywrócić bazy")).toBeInTheDocument()
+  expect(screen.getByText(/To nie jest plik bazy danych/)).toBeInTheDocument()
+  expect(screen.getByText(/Obecne dane są nietknięte\./)).toBeInTheDocument()
+})

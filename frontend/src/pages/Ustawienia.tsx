@@ -1,8 +1,8 @@
-import { CircleAlert, Monitor, Moon, RefreshCw, Sun } from "lucide-react"
-import { useEffect, useState } from "react"
+import { CircleAlert, CircleCheck, Download, Monitor, Moon, RefreshCw, Sun, Upload } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import { useBlocker } from "react-router"
 import {
-  ApiError, getRuntimes, getSettings, saveSettings,
+  ApiError, BACKUP_URL, getRuntimes, getSettings, restoreBackup, saveSettings,
   type RuntimeInfo, type Runtimes, type SettingsResponse, type SettingsValues,
 } from "@/api"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useHeaderStatus } from "@/headerStatus"
+import { longDate, todayIso } from "@/lib/dates"
+import { plural } from "@/lib/plural"
 import { cn } from "@/lib/utils"
 import { useTheme, type Theme } from "@/theme"
 
@@ -47,6 +49,12 @@ export default function Ustawienia() {
   const [form, setForm] = useState<Form | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Przywracanie z kopii: wybrany plik czeka na potwierdzenie w oknie dialogowym
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreResult, setRestoreResult] = useState<{ ok: boolean; text: string } | null>(null)
 
   function loadRuntimes() {
     setChecking(true)
@@ -101,6 +109,31 @@ export default function Ustawienia() {
   function set(key: keyof Form, value: string) {
     setForm((f) => (f ? { ...f, [key]: value } : f))
   }
+
+  function refreshDatabaseInfo() {
+    getSettings().then((s) => setSettings((old) => (old ? { ...old, database: s.database } : s))).catch(() => {})
+  }
+
+  async function confirmRestore() {
+    if (!pendingFile) return
+    setRestoring(true)
+    try {
+      const result = await restoreBackup(pendingFile)
+      setRestoreResult({
+        ok: true,
+        text: `Przywrócono bazę: ${plural(result.tasks, "zadanie", "zadania", "zadań")}. Poprzednia baza: ${result.backup_path}`,
+      })
+      refreshDatabaseInfo()
+    } catch (e) {
+      setRestoreResult({ ok: false, text: e instanceof ApiError ? e.message : "Brak połączenia z aplikacją" })
+    }
+    setRestoring(false)
+    setPendingFile(null)
+    if (fileInput.current) fileInput.current.value = ""      // ten sam plik można wybrać jeszcze raz
+  }
+
+  const lastBackup = settings?.database.last_backup_at
+  const lastBackupText = lastBackup ? `${longDate(lastBackup.slice(0, 10))}, ${lastBackup.slice(11, 16)}` : "nigdy"
 
   async function save() {
     if (!form || hasErrors) return
@@ -161,6 +194,75 @@ export default function Ustawienia() {
         </CardContent>
       </Card>
 
+      {/* Kopia zapasowa */}
+      {settings && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Kopia zapasowa</CardTitle>
+            <CardDescription>Wszystkie zadania, testy i historia ocen są w jednym pliku bazy.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1 rounded-lg bg-muted px-3 py-2">
+              <code className="text-xs break-all">{settings.database.path}</code>
+              <span className="text-xs text-muted-foreground">
+                {plural(settings.database.task_count, "zadanie", "zadania", "zadań")} · ostatnia kopia: {lastBackupText}
+              </span>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2 rounded-xl border p-4">
+                <span className="font-medium">Eksportuj bazę</span>
+                <p className="text-xs text-muted-foreground">Pobierz kopię pliku, np. <code>leetrepeat-{todayIso()}.db</code>.</p>
+                <Button variant="outline" className="self-start" asChild>
+                  <a href={BACKUP_URL} download onClick={() => setTimeout(refreshDatabaseInfo, 1000)}>
+                    <Download /> Pobierz kopię
+                  </a>
+                </Button>
+              </div>
+              <div className="flex flex-col gap-2 rounded-xl border p-4">
+                <span className="font-medium">Przywróć z kopii</span>
+                <p className="text-xs text-muted-foreground">Wybierz wcześniej pobrany plik <code>.db</code>.</p>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept=".db"
+                  aria-label="Plik kopii bazy"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null
+                    setRestoreResult(null)
+                    setPendingFile(file)
+                  }}
+                />
+                <Button variant="outline" className="self-start" onClick={() => fileInput.current?.click()} disabled={restoring}>
+                  <Upload /> {restoring ? "Przywracanie…" : "Wybierz plik…"}
+                </Button>
+              </div>
+            </div>
+
+            <Alert>
+              <CircleAlert />
+              <AlertTitle>Przywrócenie zastępuje obecną bazę</AlertTitle>
+              <AlertDescription>Przed zastąpieniem aplikacja sama zapisze kopię obecnego pliku obok niego.</AlertDescription>
+            </Alert>
+
+            {restoreResult && (restoreResult.ok ? (
+              <Alert>
+                <CircleCheck />
+                <AlertTitle>Gotowe</AlertTitle>
+                <AlertDescription className="break-all">{restoreResult.text}</AlertDescription>
+              </Alert>
+            ) : (
+              <Alert variant="destructive">
+                <CircleAlert />
+                <AlertTitle>Nie udało się przywrócić bazy</AlertTitle>
+                <AlertDescription>{restoreResult.text}. Obecne dane są nietknięte.</AlertDescription>
+              </Alert>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Środowisko uruchomieniowe */}
       {form && errors && (
         <Card>
@@ -217,6 +319,26 @@ export default function Ustawienia() {
           </div>
         </div>
       )}
+
+      <AlertDialog open={pendingFile !== null} onOpenChange={(open) => {
+        if (!open && !restoring) {
+          setPendingFile(null)
+          if (fileInput.current) fileInput.current.value = ""
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Przywrócić bazę z pliku {pendingFile?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Przywrócenie zastępuje obecną bazę. Przed zastąpieniem aplikacja sama zapisze kopię obecnego pliku obok niego.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRestore}>Przywróć</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={blocker.state === "blocked"}>
         <AlertDialogContent>
