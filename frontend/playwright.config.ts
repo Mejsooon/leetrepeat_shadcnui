@@ -11,7 +11,8 @@ export default defineConfig({
     launchOptions: process.env.PW_CHROME ? { executablePath: process.env.PW_CHROME } : {},
   },
   webServer: {
-    command: `${python} main.py`,
+    // Za każdym razem świeża baza testowa
+    command: `${python} -c "import os; os.path.exists('e2e-test.db') and os.remove('e2e-test.db')" && ${python} main.py`,
     cwd: "..",
     url: "http://127.0.0.1:8000/api/health",
     env: { LEETREPEAT_DB: "e2e-test.db" },

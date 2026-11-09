@@ -6,8 +6,9 @@ sama planuje kolejną powtórkę.
 
 Działa lokalnie na Twoim komputerze (`http://127.0.0.1:8000`), bez internetu i bez kont.
 
-> Stan: **Etap 1 — fundament** (szkielet aplikacji, panel boczny, motyw jasny/ciemny/systemowy, baza danych,
-> uruchamianie kodu). Ekrany wypełnią się w kolejnych etapach — plan w `docs/superpowers/`.
+> Stan: **Etap 2 — zadania**: biblioteka z wyszukiwarką, filtrami i paginacją, dodawanie / edycja / usuwanie
+> zadań (tagi, trudność, testy, edytor kodu), import ze starej wersji. Pulpit, sesja powtórek, statystyki
+> i ustawienia dojdą w kolejnych etapach — plany w `docs/superpowers/`.
 > Poprzednia wersja: [Mejsooon/leetrepeat](https://github.com/Mejsooon/leetrepeat) (archiwum).
 
 ## Wymagania
@@ -70,6 +71,28 @@ ani obca strona internetowa nie może wysłać Ci kodu do wykonania.
 Wszystko jest w jednym pliku **`leetrepeat.db`** obok `main.py` (kopia zapasowa = skopiuj ten plik).
 Inna lokalizacja: zmienna `LEETREPEAT_DB`, np. `LEETREPEAT_DB=~/zadania.db python main.py`.
 
+## Import zadań
+
+Ze starej wersji (LeetRepeat v2) — przenosi zadania i testy; historia ocen nie jest przenoszona,
+wszystkie zadania startują jako **Nowe** z trudnością „Łatwe”:
+
+```bash
+python scripts/import_v2.py ŚCIEŻKA/DO/STAREJ/leetrepeat.db
+```
+
+Gotowy zestaw zadań z folderu `seeds/`:
+
+```bash
+python scripts/import_seed.py seeds/python_variables.json
+```
+
+| Plik | Zawartość |
+|---|---|
+| `python_variables.json` | 10 zadań z notatki PYTHON — VARIABLES (tag „Zmienne”) |
+
+Zadania o tym samym tytule i języku, które już są w bazie, są pomijane — import można powtarzać.
+Oba skrypty przyjmują `--db INNA_BAZA.db` (domyślnie `leetrepeat.db` obok `main.py` albo `LEETREPEAT_DB`).
+
 ## Zmiany we frontendzie
 
 Zbudowany frontend (`frontend/dist`) jest w repo, dlatego do codziennego używania Node.js nie jest potrzebny.
@@ -104,14 +127,17 @@ własny Chrome zamiast pobranego przez Playwright: `PW_CHROME=/ścieżka/do/chro
 leetrepeat_shadcnui/
 ├── main.py                  # start: FastAPI, /api i serwowanie frontend/dist
 ├── backend/
-│   ├── api/routes.py        # endpointy HTTP
-│   ├── services/runner.py   # uruchamianie kodu Python/C# i porównanie z testami
+│   ├── api/                 # routes.py (endpointy HTTP), schemas.py (walidacja danych)
+│   ├── services/            # tasks.py (status, tagi, daty), runner.py (uruchamianie kodu Python/C#)
+│   ├── repository/tasks.py  # cały SQL zadań, testów i tagów
 │   └── core/database.py     # połączenie z SQLite i tabele
+├── scripts/                 # import_v2.py, import_seed.py
+├── seeds/                   # gotowe zestawy zadań (JSON)
 ├── frontend/
 │   ├── src/                 # React + TypeScript + Tailwind + shadcn/ui
 │   │   ├── api.ts           # wszystkie wywołania API
 │   │   ├── theme.tsx        # motyw jasny / ciemny / systemowy
-│   │   ├── components/      # AppSidebar, SiteHeader, AppLayout, ConnectionBanner, ui/
+│   │   ├── components/      # AppSidebar, SiteHeader, AppLayout, CodeEditor (Monaco), TagInput, ui/
 │   │   └── pages/           # ekrany
 │   ├── e2e/                 # test całości (Playwright)
 │   └── dist/                # zbudowany frontend (w repo)
