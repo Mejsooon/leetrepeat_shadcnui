@@ -52,3 +52,16 @@ export function formatDuration(seconds: number): string {
   const s = String(seconds % 60).padStart(2, "0")
   return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`
 }
+
+// „9 lis”; withYear = true → „9 lis 2026”
+export function shortDate(iso: string, withYear = false): string {
+  const date = parseLocalDate(iso)
+  const text = `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`
+  return withYear ? `${text} ${date.getFullYear()}` : text
+}
+
+// Data sprzed `days` dni (lokalnie), np. początek okresu „ostatnie 14 dni” = daysAgo(13)
+export function daysAgo(days: number): string {
+  const now = new Date()
+  return toIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - days))
+}

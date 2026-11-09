@@ -11,7 +11,7 @@ it.each([
   ["/zadania/nowe", "Dodaj zadanie"],
   ["/zadania/5/edycja", "Edytuj zadanie"],
   ["/sesja?zadanie=5", "Two Sum"],
-  ["/statystyki", "Statystyki"],
+  ["/statystyki", "Zobacz, jak rośniesz."],
   ["/ustawienia", "Ustawienia"],
 ])("trasa %s pokazuje ekran %s", async (path, heading) => {
   stubApi({ "/api/tasks?": EMPTY_LIST, "/api/tasks": EMPTY_LIST, "/api/health": { status: "ok", version: "3.0.0" },
