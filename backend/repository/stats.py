@@ -42,3 +42,13 @@ def due_dates(con: sqlite3.Connection, task_ids: list[int]) -> dict[int, str]:
     marks = ",".join("?" * len(task_ids))
     rows = con.execute(f"SELECT id, due_date FROM tasks WHERE id IN ({marks})", task_ids).fetchall()
     return {row["id"]: row["due_date"] for row in rows}
+
+
+def period_reviews(con: sqlite3.Connection, start: str, end: str) -> list[sqlite3.Row]:
+    # Oceny z dniem w [start, end] (włącznie) z danymi zadania
+    return con.execute(
+        """SELECT r.task_id, t.title, t.language, r.rating, r.duration_seconds,
+                  substr(r.reviewed_at, 1, 10) AS day
+           FROM reviews r JOIN tasks t ON t.id = r.task_id
+           WHERE substr(r.reviewed_at, 1, 10) BETWEEN ? AND ?""",
+        (start, end)).fetchall()

@@ -1,6 +1,6 @@
 """Endpointy HTTP pod /api. Każdy otwiera bazę, woła serwis i zwraca odpowiedź."""
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Response
@@ -109,6 +109,25 @@ def create_router(db_path: str) -> APIRouter:
         con = connect(db_path)
         try:
             return stats_service.dashboard(con, date.today(), language)
+        finally:
+            con.close()
+
+    # Statystyki okresu [from, to] włącznie; domyślnie ostatnie 14 dni
+    @router.get("/stats")
+    def stats(from_: date | None = Query(None, alias="from"), to: date | None = None):
+        if from_ is None and to is None:
+            to = date.today()
+        if to is None:
+            to = from_ + timedelta(days=13)
+        if from_ is None:
+            from_ = to - timedelta(days=13)
+        if from_ > to:
+            raise HTTPException(422, "Początek okresu jest po jego końcu")
+        if (to - from_).days + 1 > 366:
+            raise HTTPException(422, "Okres może mieć najwyżej 366 dni")
+        con = connect(db_path)
+        try:
+            return stats_service.stats(con, from_, to, date.today())
         finally:
             con.close()
 

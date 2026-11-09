@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 import pytest
 
-from backend.services.stats import dashboard, streaks
+from backend.services.stats import dashboard, stats, streaks
 from backend.services.tasks import create_task
 
 TODAY = date(2026, 11, 9)
@@ -104,3 +104,83 @@ def test_dashboard_language(db):
     d = dashboard(db, TODAY, "csharp")
     assert d["library_count"] == 1
     assert [item["title"] for item in d["queue"]] == ["Cs"]
+
+
+# --- Statystyki okresu (domyślnie 14 dni: 2026-10-27 … 2026-11-09) ---
+
+START = date(2026, 10, 27)
+
+
+def test_stats_empty(db):                       # Review Focus 1
+    s = stats(db, START, TODAY, TODAY)
+    assert s["reviews_count"] == 0
+    assert s["success_rate"] is None and s["avg_duration_s"] is None
+    assert s["avg_duration_by_language"] == {"python": None, "csharp": None}
+    assert s["success_by_language"] == {"python": {"successful": 0, "total": 0}, "csharp": {"successful": 0, "total": 0}}
+    assert len(s["daily"]) == 14 and all(d["python"] == 0 and d["csharp"] == 0 for d in s["daily"])
+    assert s["weak_tasks"] == []
+    assert s["recent_days"][0] == {"date": "2026-11-09", "count": 0, "success_rate": None}
+    assert len(s["recent_days"]) == 4
+
+
+def test_stats_counts(db):
+    py = add(db, "Py")
+    cs = add(db, "Cs", language="csharp")
+    review(db, py, "2026-11-01", "good", 60)
+    review(db, py, "2026-11-02", "again", 120)
+    review(db, py, "2026-11-03", "easy", 30)
+    review(db, cs, "2026-11-03", "hard", 90)
+    review(db, cs, "2026-10-01", "again", 999)          # poza okresem
+    s = stats(db, START, TODAY, TODAY)
+    assert s["reviews_count"] == 4
+    assert s["by_language"] == {"python": 3, "csharp": 1}
+    assert s["success_rate"] == pytest.approx(0.75)
+    assert s["success_by_language"]["python"] == {"successful": 2, "total": 3}
+    assert s["success_by_language"]["csharp"] == {"successful": 1, "total": 1}
+    assert s["avg_duration_s"] == pytest.approx(75.0)
+    assert s["avg_duration_by_language"]["python"] == pytest.approx(70.0)
+
+
+def test_stats_daily_fills_zeros(db):
+    task_id = add(db, "Py")
+    review(db, task_id, "2026-11-03")
+    review(db, task_id, "2026-11-09")
+    daily = stats(db, START, TODAY, TODAY)["daily"]
+    assert daily[0] == {"date": "2026-10-27", "python": 0, "csharp": 0}
+    assert {"date": "2026-11-03", "python": 1, "csharp": 0} in daily
+    assert daily[-1] == {"date": "2026-11-09", "python": 1, "csharp": 0}
+    assert sum(d["python"] for d in daily) == 2
+
+
+def test_weak_tasks(db):
+    def task_with(title, ratings):
+        task_id = add(db, title)
+        for i, rating in enumerate(ratings):
+            review(db, task_id, f"2026-11-0{i + 1}", rating)
+        return task_id
+    a = task_with("A", ["again", "again", "again", "good"])     # 1/4
+    b = task_with("B", ["again", "good", "good"])               # 2/3
+    task_with("C", ["good", "good", "good"])                    # 3/3 — pomijane
+    task_with("D", ["again", "again"])                          # < 3 oceny — pomijane
+    weak = stats(db, START, TODAY, TODAY)["weak_tasks"]
+    assert [w["id"] for w in weak] == [a, b]
+    assert weak[0] == {"id": a, "title": "A", "language": "python", "successful": 1, "total": 4}
+
+
+def test_weak_tasks_limit_4(db):
+    for i in range(6):
+        task_id = add(db, f"T{i}")
+        ratings = ["again"] * (3 - min(i, 2)) + ["good"] * min(i, 2)   # 0/3, 1/3, 2/3, 2/3, 2/3, 2/3
+        for j, rating in enumerate(ratings):
+            review(db, task_id, f"2026-11-0{j + 1}", rating)
+    weak = stats(db, START, TODAY, TODAY)["weak_tasks"]
+    assert [w["title"] for w in weak] == ["T0", "T1", "T2", "T3"]
+
+
+def test_recent_days(db):
+    task_id = add(db, "Py")
+    review(db, task_id, "2026-11-09", "good")
+    review(db, task_id, "2026-11-09", "again")
+    recent = stats(db, START, TODAY, TODAY)["recent_days"]
+    assert [d["date"] for d in recent] == ["2026-11-09", "2026-11-08", "2026-11-07", "2026-11-06"]
+    assert recent[0] == {"date": "2026-11-09", "count": 2, "success_rate": 0.5}
