@@ -1,9 +1,11 @@
 """Kopia zapasowa bazy: eksport, sprawdzenie pliku i przywrócenie (spec §5 /backup, §6 „Zły plik kopii”)."""
 import os
 import sqlite3
+import tempfile
 from datetime import datetime
 
-from backend.core.database import SCHEMA
+from backend.core.database import SCHEMA, connect
+from backend.repository import settings as settings_repo
 
 MAX_RESTORE_BYTES = 200 * 1024 * 1024
 SQLITE_HEADER = b"SQLite format 3\x00"
@@ -70,18 +72,34 @@ def _free_backup_path(db_path: str, now: datetime) -> str:
 def restore(db_path: str, data: bytes, now: datetime) -> dict:
     """Zastępuje bazę zawartością pliku. Najpierw sprawdzenie (ValueError, nic nie zmienione),
     potem kopia obecnej bazy obok, na końcu nadpisanie przez backup API."""
-    temp_path = f"{db_path}.przywracanie-tmp"
+    # Unikalny plik tymczasowy obok bazy — dwa przywracania naraz (dwie karty) sobie nie przeszkadzają
+    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(db_path)), suffix=".przywracanie-tmp")
+    os.close(fd)
     try:
         with open(temp_path, "wb") as f:
             f.write(data)
         error = validate(temp_path)
         if error:
             raise ValueError(error)
+
+        con = connect(db_path)
+        try:
+            last_backup_at = settings_repo.get_all(con).get("last_backup_at")
+        finally:
+            con.close()
+
         backup_path = _free_backup_path(db_path, now)
         export_copy(db_path, backup_path)
         export_copy(temp_path, db_path)
-        con = sqlite3.connect(db_path)
+
+        con = connect(db_path)
         try:
+            # Kopia mogła być w trybie WAL — wracamy do jednego pliku bazy (bez -wal / -shm)
+            con.execute("PRAGMA journal_mode=DELETE")
+            # „Ostatnia kopia” dotyczy Twoich kopii, nie daty zapisanej w przywróconym pliku
+            if last_backup_at:
+                settings_repo.set_many(con, {"last_backup_at": last_backup_at})
+                con.commit()
             tasks = con.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
         finally:
             con.close()

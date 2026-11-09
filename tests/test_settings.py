@@ -82,3 +82,20 @@ def test_cross_site_put_blocked(client):             # Review Focus 2
     response = client.put("/api/settings", json={**VALID, "python_path": "/bin/sh"}, headers={"Origin": "http://evil.example"})
     assert response.status_code == 403
     assert client.get("/api/settings").json()["values"]["python_path"] == before
+
+
+def test_runtimes_requires_python3(client):                          # Etap 6
+    client.put("/api/settings", json={**VALID, "python_path": "/bin/echo"})
+    assert client.get("/api/settings/runtimes").json()["python"]["found"] is False
+
+
+def test_detect_python_warmed_on_start(tmp_path, monkeypatch):
+    import threading
+    from main import create_app
+    calls = []
+    monkeypatch.setattr(settings_service, "detect_python", lambda: calls.append(1) or "python3")
+    before = set(threading.enumerate())
+    create_app(str(tmp_path / "a.db"), str(tmp_path / "dist"))
+    for thread in set(threading.enumerate()) - before:
+        thread.join(timeout=5)
+    assert calls == [1]

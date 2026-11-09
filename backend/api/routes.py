@@ -189,6 +189,10 @@ def create_router(db_path: str) -> APIRouter:
     # Przywrócenie: ciało żądania = bajty pliku .db; zły plik → 409, dane nietknięte
     @router.post("/backup/restore")
     async def restore_backup(request: Request):
+        # Za duży plik odrzucamy po nagłówku, zanim całe ciało trafi do pamięci
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > backup_service.MAX_RESTORE_BYTES:
+            raise HTTPException(413, "Plik jest za duży")
         data = await request.body()
         if len(data) > backup_service.MAX_RESTORE_BYTES:
             raise HTTPException(413, "Plik jest za duży")

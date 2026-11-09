@@ -83,6 +83,9 @@ def check_runtimes(con: sqlite3.Connection) -> dict:
         given = values[key]
         resolved = shutil.which(given)
         version = _version(resolved, 10) if resolved else None
+        # Python musi naprawdę odpowiedzieć „Python 3…” (inny program z --version to nie Python)
+        if name == "python" and version is not None and not version.startswith("Python 3"):
+            version = None
         if version is None:
             result[name] = {"found": False, "version": None, "path": given}
         else:

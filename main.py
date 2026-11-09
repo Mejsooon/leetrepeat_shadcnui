@@ -8,6 +8,7 @@ Warstwy backendu (folder backend/):
 Frontend: zbudowany React w frontend/dist (zmiany: cd frontend && npm run build)
 """
 import os
+import threading
 from urllib.parse import urlsplit
 
 import uvicorn
@@ -20,6 +21,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from backend.api.errors import polish_message
 from backend.api.routes import create_router
 from backend.core.database import connect
+from backend.services import settings as settings_service
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -33,6 +35,8 @@ MISSING_DIST = """<!doctype html><html lang="pl"><meta charset="utf-8"><title>Le
 def create_app(db_path: str, dist_dir: str) -> FastAPI:
     # Baza z tabelami powstaje od razu przy starcie
     connect(db_path).close()
+    # Wykrywanie Pythona w tle — pierwsze „Uruchom testy” nie czeka na sprawdzanie kandydatów
+    threading.Thread(target=lambda: settings_service.detect_python(), daemon=True).start()
 
     app = FastAPI(title="LeetRepeat")
     # Tylko adresy lokalne: strona z internetu podszywająca się pod 127.0.0.1 (DNS rebinding)
