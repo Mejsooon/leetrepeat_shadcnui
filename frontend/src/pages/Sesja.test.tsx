@@ -286,3 +286,110 @@ it("trwające testy blokują przejście do oceny", async () => {           // pr
   await screen.findByText("Wszystkie testy przeszły")
   expect(screen.getByRole("button", { name: "Przejdź do oceny" })).toBeEnabled()
 })
+
+// --- Etap 6 ---
+
+async function typeNotes(text: string) {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Notatki" }))
+  fireEvent.change(await screen.findByLabelText("Twoje notatki"), { target: { value: text } })
+}
+
+it("nieudany zapis notatki jest ponawiany", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  let attempt = 0
+  const fetchMock = stubSession({
+    "PATCH /api/tasks/1/notes": () => (++attempt === 1 ? new Response("boom", { status: 500 }) : { ok: true }),
+  })
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  await typeNotes("mapa")
+  await act(async () => { vi.advanceTimersByTime(1000) })
+  expect(await screen.findByText("Nie udało się zapisać notatki — ponowię za chwilę")).toBeInTheDocument()
+  await act(async () => { vi.advanceTimersByTime(5000) })
+  await waitFor(() => expect(callsTo(fetchMock, "PATCH", "/api/tasks/1/notes")).toHaveLength(2))
+  expect(JSON.parse(String(callsTo(fetchMock, "PATCH", "/api/tasks/1/notes")[1][1]?.body))).toEqual({ notes: "mapa" })
+  await waitFor(() => expect(screen.queryByText(/Nie udało się zapisać notatki/)).not.toBeInTheDocument())
+})
+
+it("ponowienie zapisuje do właściwego zadania", async () => {         // Review Focus 4
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  let attempt = 0
+  const fetchMock = stubSession({
+    "PATCH /api/tasks/1/notes": () => (++attempt === 1 ? new Response("boom", { status: 500 }) : { ok: true }),
+  })
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  await typeNotes("notatka A")
+  fireEvent.click(screen.getByRole("button", { name: "Przejdź do oceny" }))
+  await screen.findByRole("radio", { name: /Dobre/ })
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" }))
+  await screen.findByRole("heading", { name: "Valid Parentheses" })
+  await act(async () => { vi.advanceTimersByTime(5000) })
+  await waitFor(() => expect(callsTo(fetchMock, "PATCH", "/api/tasks/1/notes")).toHaveLength(2))
+  expect(JSON.parse(String(callsTo(fetchMock, "PATCH", "/api/tasks/1/notes")[1][1]?.body))).toEqual({ notes: "notatka A" })
+  expect(callsTo(fetchMock, "PATCH", "/api/tasks/2/notes")).toHaveLength(0)
+  await waitFor(() => expect(screen.queryByText(/Nie udało się zapisać notatki/)).not.toBeInTheDocument())
+})
+
+it("pagehide zapisuje notatkę z keepalive", async () => {
+  const fetchMock = stubSession()
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  await typeNotes("zamykam kartę")
+  act(() => { window.dispatchEvent(new Event("pagehide")) })
+  const patch = callsTo(fetchMock, "PATCH", "/api/tasks/1/notes")
+  expect(patch).toHaveLength(1)
+  expect(patch[0][1]?.keepalive).toBe(true)
+})
+
+it("błąd przy wyjściu nie zostaje w nagłówku", async () => {
+  stubSession({
+    "PATCH /api/tasks/1/notes": () => new Response("boom", { status: 500 }),
+    "GET /api/dashboard": {
+      due_count: 0, due_by_language: { python: 0, csharp: 0 }, new_count: 0, streak: 0, longest_streak: 0,
+      library_count: 2, library_by_language: { python: 2, csharp: 0 }, queue: [], queue_rest: [], session_count: 0,
+      progress_by_language: [], next_review_date: null, completed_today: 0,
+    },
+  })
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  await typeNotes("wychodzę")
+  fireEvent.click(screen.getByRole("button", { name: "Zakończ sesję" }))
+  await screen.findByRole("heading", { level: 1, name: "Dobry dzień na trochę kodu." })
+  await new Promise((r) => setTimeout(r, 50))
+  expect(screen.getByText("Zapisano lokalnie")).toBeInTheDocument()
+  expect(screen.queryByText(/Nie udało się zapisać notatki/)).not.toBeInTheDocument()
+})
+
+it("po zapisie oceny panel znika od razu", async () => {
+  stubSession({ "GET /api/tasks/2": () => new Promise(() => {}) })
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  fireEvent.click(screen.getByRole("button", { name: "Przejdź do oceny" }))
+  await screen.findByRole("radio", { name: /Dobre/ })
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz ocenę i przejdź dalej" }))
+  await waitFor(() => expect(screen.queryByRole("button", { name: /Zapisz ocenę/ })).not.toBeInTheDocument())
+  expect(screen.getByText("Wczytywanie zadania…")).toBeInTheDocument()
+})
+
+it("starszy nieudany zapis nie nadpisuje nowszej notatki", async () => {   // przegląd końcowy, Important 1
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  let failFirst: () => void = () => {}
+  const fetchMock = stubSession({
+    "PATCH /api/tasks/1/notes": (_url: string, init?: RequestInit) => {
+      const text = JSON.parse(String(init?.body)).notes
+      if (text === "v1") return new Promise((resolve) => { failFirst = () => resolve(new Response("boom", { status: 500 })) })
+      return { ok: true }
+    },
+  })
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  await typeNotes("v1")
+  await act(async () => { vi.advanceTimersByTime(1000) })           // v1 wysłane, wisi
+  fireEvent.change(screen.getByLabelText("Twoje notatki"), { target: { value: "v2" } })
+  await act(async () => { vi.advanceTimersByTime(1000) })           // v2 wysłane i zapisane
+  await act(async () => { failFirst() })                             // dopiero teraz v1 się nie udaje
+  await act(async () => { vi.advanceTimersByTime(6000) })
+  const bodies = callsTo(fetchMock, "PATCH", "/api/tasks/1/notes").map((c) => JSON.parse(String(c[1]?.body)).notes)
+  expect(bodies).toEqual(["v1", "v2"])                                // bez ponowienia starego v1
+})

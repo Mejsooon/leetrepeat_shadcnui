@@ -25,3 +25,9 @@ it("baner nie pojawia się, gdy health zwraca ok", async () => {
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled())
   expect(screen.queryByText("Nie można połączyć się z aplikacją")).not.toBeInTheDocument()
 })
+
+it("502 z serwera deweloperskiego pokazuje baner", async () => {     // Etap 6: Vite proxy, backend wyłączony
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("Bad Gateway", { status: 502 })))
+  render(<ConnectionBanner />)
+  expect(await screen.findByText("Nie można połączyć się z aplikacją")).toBeInTheDocument()
+})

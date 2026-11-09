@@ -93,8 +93,10 @@ def list_tasks(con: sqlite3.Connection, today: str, q: str, language: str | None
     where = []
     params: list = []
     if q:
-        where.append("(pylower(t.title) LIKE ? OR pylower(t.description) LIKE ?)")
-        params += [f"%{q.lower()}%", f"%{q.lower()}%"]
+        # % i _ to w LIKE wieloznaczniki — uciekamy je, żeby „100%” szukało dosłownie
+        escaped = q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        where.append("(pylower(t.title) LIKE ? ESCAPE '\\' OR pylower(t.description) LIKE ? ESCAPE '\\')")
+        params += [f"%{escaped}%", f"%{escaped}%"]
     if language:
         where.append("t.language = ?")
         params.append(language)

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderApp } from "@/test/renderApp"
 import { mockMatchMedia } from "@/test/matchMedia"
@@ -167,4 +167,51 @@ it("po przywróceniu formularz pokazuje ustawienia z przywróconej bazy", async 
   expect(screen.getByLabelText("Limit czasu Pythona")).toHaveValue(8)
   expect(screen.getByRole("button", { name: "Zapisz" })).toBeDisabled()          // to zapisane wartości, nie zmiany
   expect(calls(fetchMock, "GET", "/api/settings/runtimes").length).toBeGreaterThanOrEqual(2)
+})
+
+// --- Etap 6 ---
+
+it("Escape w Ustawieniach", async () => {
+  stubSettings()
+  const { router } = renderApp("/ustawienia")
+  fireEvent.change(await screen.findByLabelText("Limit czasu Pythona"), { target: { value: "7" } })
+  await userEvent.click(screen.getByRole("link", { name: /Zadania/ }))
+  expect(await screen.findByText("Opuścić stronę?")).toBeInTheDocument()
+  await userEvent.keyboard("{Escape}")
+  await waitFor(() => expect(screen.queryByText("Opuścić stronę?")).not.toBeInTheDocument())
+  expect(router.state.location.pathname).toBe("/ustawienia")
+})
+
+it("za długa ścieżka", async () => {
+  stubSettings()
+  renderApp("/ustawienia")
+  fireEvent.change(await screen.findByLabelText("Ścieżka do Pythona"), { target: { value: "x".repeat(501) } })
+  expect(screen.getByText("Ścieżka może mieć najwyżej 500 znaków")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Zapisz" })).toBeDisabled()
+})
+
+it("ostatnia kopia odświeża się po pobraniu", async () => {           // Etap 6
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  let settingsCalls = 0
+  const json = (body: unknown) => new Response(JSON.stringify(body))
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url === "/api/settings") {
+      settingsCalls += 1
+      const last = settingsCalls >= 3 ? "2026-11-09T22:00:00" : null
+      return json({ ...SETTINGS, database: { ...SETTINGS.database, last_backup_at: last } })
+    }
+    if (url === "/api/settings/runtimes") return json(RUNTIMES)
+    return json({ status: "ok", version: "3.0.0" })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  renderApp("/ustawienia")
+  const link = await screen.findByRole("link", { name: /Pobierz kopię/ })
+  link.addEventListener("click", (e) => e.preventDefault())          // jsdom nie pobiera plików
+  fireEvent.click(link)
+  await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
+  expect(await screen.findByText("24 zadania · ostatnia kopia: 9 listopada 2026, 22:00")).toBeInTheDocument()
+  const callsAfter = settingsCalls
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+  expect(settingsCalls).toBe(callsAfter)                                // po zmianie odświeżanie się kończy
+  vi.useRealTimers()
 })

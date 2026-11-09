@@ -73,10 +73,50 @@ def test_sec_fetch_site_cross_site_blocked(client):
     assert client.delete("/api/tasks/1", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
 
 
-def test_same_origin_allowed(client, monkeypatch):
+def test_own_port_allowed(client, monkeypatch):                    # Etap 6, Review Focus 1
+    # Klient testowy wysyła Host "127.0.0.1" (port 80) — własny port to 80
     counting_runner(monkeypatch)
-    for origin in ("http://127.0.0.1:8000", "http://localhost:5173"):
+    for origin in ("http://127.0.0.1", "http://localhost"):
         assert client.post("/api/run", json=RUN, headers={"Origin": origin}).status_code == 200
+
+
+def test_vite_dev_server_allowed_via_host(client, monkeypatch):
+    # Proxy Vite przekazuje Host "localhost:5173" — ten sam port co Origin, więc przechodzi
+    counting_runner(monkeypatch)
+    response = client.post("/api/run", json=RUN, headers={"Host": "localhost:5173", "Origin": "http://localhost:5173"})
+    assert response.status_code == 200
+
+
+def test_other_app_on_5173_blocked(client):                        # przegląd końcowy: inny projekt Vite na 5173
+    response = client.post("/api/run", json=RUN, headers={"Origin": "http://localhost:5173"})
+    assert response.status_code == 403
+
+
+def test_other_local_port_blocked(client):
+    for origin in ("http://localhost:3000", "http://127.0.0.1:3000"):
+        response = client.put("/api/settings", json={"python_path": "/bin/sh", "dotnet_path": "dotnet",
+                                                     "python_timeout_s": 5, "csharp_timeout_s": 20},
+                              headers={"Origin": origin})
+        assert response.status_code == 403
+
+
+def test_localhost_vs_ip_same_port(client, monkeypatch):           # Review Focus 1
+    counting_runner(monkeypatch)
+    response = client.post("/api/run", json=RUN, headers={"Host": "127.0.0.1:8000", "Origin": "http://localhost:8000"})
+    assert response.status_code == 200
+
+
+def test_head_request(client):
+    assert client.head("/").status_code == 200
+
+
+def test_missing_static_file_404(client):                          # Review Focus 3
+    assert client.get("/favicon.ico").status_code == 404
+    for path in ("/zadania/5/edycja", "/statystyki?dni=30"):
+        response = client.get(path)
+        assert response.status_code == 200 and 'id="root"' in response.text
+    assert client.get("/assets/app.js").status_code == 200
+    assert client.get("/index.html").status_code == 200
 
 
 def test_get_with_foreign_origin_allowed(client):

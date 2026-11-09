@@ -97,10 +97,12 @@ export default function Ustawienia() {
   }, [dirty])
 
   // Walidacja — te same reguły i komunikaty co w API
+  const pathError = (text: string) =>
+    (!text.trim() ? BLANK : text.trim().length > 500 ? "Ścieżka może mieć najwyżej 500 znaków" : null)
   const limitError = (text: string) => (/^\d+$/.test(text.trim()) && +text >= 1 && +text <= 300 ? null : BAD_LIMIT)
   const errors = form ? {
-    python_path: form.python_path.trim() ? null : BLANK,
-    dotnet_path: form.dotnet_path.trim() ? null : BLANK,
+    python_path: pathError(form.python_path),
+    dotnet_path: pathError(form.dotnet_path),
     python_timeout_s: limitError(form.python_timeout_s),
     csharp_timeout_s: limitError(form.csharp_timeout_s),
   } : null
@@ -110,8 +112,23 @@ export default function Ustawienia() {
     setForm((f) => (f ? { ...f, [key]: value } : f))
   }
 
-  function refreshDatabaseInfo() {
-    getSettings().then((s) => setSettings((old) => (old ? { ...old, database: s.database } : s))).catch(() => {})
+  // Po „Pobierz kopię”: co 1 s (najwyżej 10 razy) sprawdzamy, czy serwer zapisał nową „ostatnią kopię”
+  // — duża baza kopiuje się dłużej niż sekundę
+  function watchBackupTime() {
+    const before = settings?.database.last_backup_at ?? null
+    let attempts = 0
+    const tick = () => {
+      attempts += 1
+      getSettings()
+        .then((s) => {
+          setSettings((old) => (old ? { ...old, database: s.database } : s))
+          if (s.database.last_backup_at === before && attempts < 10) setTimeout(tick, 1000)
+        })
+        .catch(() => {
+          if (attempts < 10) setTimeout(tick, 1000)
+        })
+    }
+    setTimeout(tick, 1000)
   }
 
   async function confirmRestore() {
@@ -222,7 +239,7 @@ export default function Ustawienia() {
                 <span className="font-medium">Eksportuj bazę</span>
                 <p className="text-xs text-muted-foreground">Pobierz kopię pliku, np. <code>leetrepeat-{todayIso()}.db</code>.</p>
                 <Button variant="outline" className="self-start" asChild>
-                  <a href={BACKUP_URL} download onClick={() => setTimeout(refreshDatabaseInfo, 1000)}>
+                  <a href={BACKUP_URL} download onClick={watchBackupTime}>
                     <Download /> Pobierz kopię
                   </a>
                 </Button>
@@ -348,7 +365,8 @@ export default function Ustawienia() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={blocker.state === "blocked"}>
+      {/* Escape albo klik obok okna = „Zostań” */}
+      <AlertDialog open={blocker.state === "blocked"} onOpenChange={(open) => { if (!open) blocker.reset?.() }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Opuścić stronę?</AlertDialogTitle>

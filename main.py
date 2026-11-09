@@ -8,16 +8,20 @@ Warstwy backendu (folder backend/):
 Frontend: zbudowany React w frontend/dist (zmiany: cd frontend && npm run build)
 """
 import os
+import threading
 from urllib.parse import urlsplit
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from backend.api.errors import polish_message
 from backend.api.routes import create_router
 from backend.core.database import connect
+from backend.services import settings as settings_service
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -31,6 +35,8 @@ MISSING_DIST = """<!doctype html><html lang="pl"><meta charset="utf-8"><title>Le
 def create_app(db_path: str, dist_dir: str) -> FastAPI:
     # Baza z tabelami powstaje od razu przy starcie
     connect(db_path).close()
+    # Wykrywanie Pythona w tle — pierwsze „Uruchom testy” nie czeka na sprawdzanie kandydatów
+    threading.Thread(target=lambda: settings_service.detect_python(), daemon=True).start()
 
     app = FastAPI(title="LeetRepeat")
     # Tylko adresy lokalne: strona z internetu podszywająca się pod 127.0.0.1 (DNS rebinding)
@@ -41,13 +47,32 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
     # Przeglądarka dokleja wtedy Origin / Sec-Fetch-Site — po nich odrzucamy każdą zmianę danych i /api/run.
     @app.middleware("http")
     async def block_cross_site(request: Request, call_next):
-        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/"):
-            origin = request.headers.get("origin")
-            origin_host = urlsplit(origin).hostname if origin else None
+        path = request.url.path
+        changes_data = request.method in ("POST", "PUT", "PATCH", "DELETE") and path.startswith("/api/")
+        # GET /api/backup też: robi kopię i zapisuje „ostatnią kopię”, więc obca strona nie może go wywołać
+        if changes_data or (request.method == "GET" and path == "/api/backup"):
             cross_site = request.headers.get("sec-fetch-site") == "cross-site"
-            if cross_site or (origin is not None and origin_host not in ("127.0.0.1", "localhost")):
+            origin = request.headers.get("origin")
+            allowed_origin = True
+            if origin is not None:
+                parts = urlsplit(origin)
+                # Port serwera bierzemy z nagłówka Host (np. 127.0.0.1:8000); bez portu = 80
+                host_port = urlsplit("//" + request.headers.get("host", "")).port or 80
+                try:
+                    origin_port = parts.port or 80
+                except ValueError:
+                    origin_port = None
+                # Tylko port samego serwera. Serwer deweloperski Vite przekazuje Host „localhost:5173”,
+                # więc też przechodzi — a inna aplikacja na 5173 (z Hostem serwera) już nie
+                allowed_origin = parts.hostname in ("127.0.0.1", "localhost") and origin_port == host_port
+            if cross_site or not allowed_origin:
                 return JSONResponse({"detail": "Żądanie z innej strony zostało zablokowane"}, status_code=403)
         return await call_next(request)
+
+    # 422 z walidacji: jeden czytelny komunikat po polsku zamiast listy błędów Pydantica
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError):
+        return JSONResponse({"detail": polish_message(exc.errors()[0])}, status_code=422)
 
     app.include_router(create_router(db_path))
 
@@ -58,7 +83,7 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     # Wszystko poza /api to frontend: istniejący plik z dist albo index.html (React Router sam wybierze ekran)
-    @app.get("/{path:path}", include_in_schema=False)
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def frontend(path: str):
         if path == "api" or path.startswith("api/"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
@@ -68,6 +93,9 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
         # Plik musi leżeć wewnątrz dist — ścieżki typu ../ nie wychodzą poza folder
         if path and file_path.startswith(dist_dir + os.sep) and os.path.isfile(file_path):
             return FileResponse(file_path)
+        # Brakujący plik (np. /favicon.ico) to 404, a nie strona aplikacji — trasy React nie mają kropek
+        if "." in path.rsplit("/", 1)[-1]:
+            return PlainTextResponse("Nie znaleziono", status_code=404)
         return FileResponse(index_file)
 
     return app

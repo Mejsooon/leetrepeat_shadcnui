@@ -164,3 +164,65 @@ def test_restore_in_folder_with_special_chars(tmp_path, folder):   # przegląd k
     assert response.status_code == 200, response.text
     assert response.json()["tasks"] == 1
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted([folder, "dist"])   # nic nie powstało poza folderem bazy
+
+
+def test_backup_download_cross_site(client):                       # Etap 6
+    assert client.get("/api/backup", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert client.get("/api/settings").json()["database"]["last_backup_at"] is None
+
+
+def test_backup_temp_removed_on_error(app, tmp_path, monkeypatch):
+    import tempfile as tempfile_module
+    from fastapi.testclient import TestClient
+    temp_dir = tmp_path / "tmp"
+    temp_dir.mkdir()
+    real_mkstemp = tempfile_module.mkstemp
+    monkeypatch.setattr(routes.tempfile, "mkstemp", lambda **kw: real_mkstemp(dir=temp_dir, **{k: v for k, v in kw.items() if k != "dir"}))
+
+    def broken(*args):
+        raise OSError("dysk pełny")
+    monkeypatch.setattr(backup_service, "export_copy", broken)
+    client = TestClient(app, base_url="http://127.0.0.1", raise_server_exceptions=False)
+    assert client.get("/api/backup").status_code == 500
+    assert list(temp_dir.iterdir()) == []
+
+
+def test_restore_wal_file_switches_to_delete(client, tmp_path):      # Etap 6, Review Focus 5
+    from backend.core.database import SCHEMA
+    wal_path = tmp_path / "wal-kopia.db"
+    con = sqlite3.connect(wal_path)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.executescript(SCHEMA)
+    con.execute("""INSERT INTO tasks (title, language, kind, difficulty, description, starter_code, hint, solution,
+                   notes, created_at, updated_at, interval_days, due_date)
+                   VALUES ('Z kopii', 'python', 'function', 'easy', 'd', '', '', 's', '', '2026-11-01T10:00:00',
+                           '2026-11-01T10:00:00', 0, '2026-11-01')""")
+    con.commit()
+    con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    con.close()
+    response = restore(client, wal_path.read_bytes())
+    assert response.status_code == 200, response.text
+    live = sqlite3.connect(tmp_path / "test.db")
+    assert live.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+    live.close()
+    assert client.post("/api/tasks", json=TASK).status_code == 201
+    assert not (tmp_path / "test.db-wal").exists() and not (tmp_path / "test.db-shm").exists()
+
+
+def test_restore_temp_names_unique(client, tmp_path, monkeypatch):
+    seen = []
+    real_validate = backup_service.validate
+    monkeypatch.setattr(backup_service, "validate", lambda path: seen.append(path) or real_validate(path))
+    data = download(client)
+    restore(client, data)
+    restore(client, data)
+    assert len(seen) == 2 and seen[0] != seen[1]
+    assert [p for p in tmp_path.iterdir() if p.name.endswith(".przywracanie-tmp")] == []
+
+
+def test_last_backup_kept_after_restore(client):
+    data = download(client)
+    before = client.get("/api/settings").json()["database"]["last_backup_at"]
+    assert before is not None
+    restore(client, data)
+    assert client.get("/api/settings").json()["database"]["last_backup_at"] == before

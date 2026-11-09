@@ -191,3 +191,56 @@ it("tag wpisany bez Entera jest dodany po opuszczeniu pola", async () => {      
   await waitFor(() => expect(calls(fetchMock, "POST")).toHaveLength(1))
   expect(JSON.parse(calls(fetchMock, "POST")[0][1]!.body as string).tags).toEqual(["Stos"])
 })
+
+// --- Etap 6 ---
+
+it("błąd zostaje przy właściwym teście po usunięciu innego", async () => {
+  const user = userEvent.setup()
+  stubApi({ "/api/tasks": EMPTY_LIST, "/api/tags": [] })
+  renderApp("/zadania/nowe")
+  await screen.findByRole("heading", { level: 1, name: "Dodaj zadanie" })
+  await user.type(screen.getByLabelText("Wywołanie – test 1"), "a()")
+  await user.click(screen.getByRole("button", { name: /Dodaj test/ }))
+  await user.click(screen.getByRole("button", { name: /Dodaj test/ }))
+  await user.type(screen.getByLabelText("Wywołanie – test 2"), "x")
+  await user.clear(screen.getByLabelText("Wywołanie – test 2"))           // test 2 ruszony i pusty → błąd
+  // test 3 pusty, ale nieruszony → bez komunikatu
+  expect(screen.getAllByText("Wywołanie funkcji nie może być puste")).toHaveLength(1)
+  await user.click(screen.getByRole("button", { name: "Usuń test 1" }))
+  // Po usunięciu: dawny test 2 (ruszony) ma komunikat, dawny test 3 (nieruszony) dalej nie
+  expect(screen.getAllByText("Wywołanie funkcji nie może być puste")).toHaveLength(1)
+  const row = screen.getByLabelText("Wywołanie – test 1").closest("li") as HTMLElement
+  expect(row).toHaveTextContent("Wywołanie funkcji nie może być puste")
+})
+
+it("błąd usuwania jest widoczny", async () => {
+  const user = userEvent.setup()
+  const fetchMock = stubApi({ "/api/tasks/5": TASK, "/api/tasks": EMPTY_LIST, "/api/tags": [] })
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === "DELETE") return new Response(JSON.stringify({ detail: "Baza zablokowana" }), { status: 500 })
+    if (url.startsWith("/api/tasks/5")) return new Response(JSON.stringify(TASK))
+    return new Response(JSON.stringify(url.startsWith("/api/tags") ? [] : EMPTY_LIST))
+  })
+  const { router } = renderApp("/zadania/5/edycja")
+  await screen.findByDisplayValue("Two Sum")
+  await user.click(screen.getByRole("button", { name: /Usuń zadanie/ }))
+  await user.click(await screen.findByRole("button", { name: "Usuń" }))
+  expect(await screen.findByText("Nie udało się usunąć zadania")).toBeInTheDocument()
+  expect(screen.getByText("Baza zablokowana")).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe("/zadania/5/edycja")
+})
+
+it("Escape zostaje na formularzu", async () => {
+  const user = userEvent.setup()
+  stubApi({ "/api/tasks": EMPTY_LIST, "/api/tags": [] })
+  const { router } = renderApp("/zadania/nowe")
+  await user.type(await screen.findByLabelText("Tytuł zadania"), "Coś")
+  await user.click(screen.getByRole("link", { name: /Statystyki/ }))
+  expect(await screen.findByText("Opuścić stronę?")).toBeInTheDocument()
+  await user.keyboard("{Escape}")
+  await waitFor(() => expect(screen.queryByText("Opuścić stronę?")).not.toBeInTheDocument())
+  expect(router.state.location.pathname).toBe("/zadania/nowe")
+  // blokada zresetowana — kolejna próba wyjścia znowu pyta
+  await user.click(screen.getByRole("link", { name: /Statystyki/ }))
+  expect(await screen.findByText("Opuścić stronę?")).toBeInTheDocument()
+})

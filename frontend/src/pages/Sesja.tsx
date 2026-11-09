@@ -116,17 +116,52 @@ export default function Sesja() {
   }, [startedAt])
   const elapsed = phase === "rate" ? ratedSeconds : Math.max(0, Math.floor((now - startedAt) / 1000))
 
-  // 4. Notatki: zapis 1 s po ostatniej zmianie; flushNotes zapisuje oczekującą notatkę od razu
-  function saveNotes() {
+  // 4. Notatki: zapis 1 s po ostatniej zmianie. Nieudany zapis czeka w `failedNotes` (osobno dla każdego
+  //    zadania) i jest ponawiany co 5 s. Przy wyjściu z ekranu i zamykaniu karty — zapis z keepalive, bez statusu.
+  const mounted = useRef(true)
+  const failedNotes = useRef<Record<number, string>>({})
+  const lastSent = useRef<Record<number, string>>({})           // ostatnio wysłany tekst każdego zadania
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function sendNotes(id: number, text: string, leaving: boolean) {
+    if (!leaving) setHeaderStatus(<span className="text-xs text-muted-foreground">Zapisywanie…</span>)
+    lastSent.current[id] = text
+    updateNotes(id, text, leaving)
+      .then(() => {
+        // Udało się — chyba że w międzyczasie ten sam zapis znów się nie powiódł z nowszym tekstem
+        if (failedNotes.current[id] === text) delete failedNotes.current[id]
+        if (!leaving && mounted.current && Object.keys(failedNotes.current).length === 0) setHeaderStatus(null)
+      })
+      .catch(() => {
+        if (leaving || !mounted.current) return
+        // Ponawiamy tylko najnowszy wysłany tekst — gdy w międzyczasie poszedł (albo czeka) nowszy,
+        // stary błąd nie może go nadpisać
+        if (lastSent.current[id] !== text || pendingNotes.current?.id === id) return
+        failedNotes.current[id] = text
+        setHeaderStatus(<span className="text-xs text-destructive">Nie udało się zapisać notatki — ponowię za chwilę</span>)
+        if (!retryTimer.current) retryTimer.current = setTimeout(retryFailedNotes, 5000)
+      })
+  }
+
+  function retryFailedNotes() {
+    retryTimer.current = null
+    for (const [id, text] of Object.entries(failedNotes.current)) sendNotes(Number(id), text, false)
+  }
+
+  function saveNotes(leaving = false) {
     if (notesTimer.current) clearTimeout(notesTimer.current)
     notesTimer.current = null
     const pending = pendingNotes.current
     pendingNotes.current = null
-    if (!pending) return
-    setHeaderStatus(<span className="text-xs text-muted-foreground">Zapisywanie…</span>)
-    updateNotes(pending.id, pending.text)
-      .then(() => setHeaderStatus(null))
-      .catch(() => setHeaderStatus(<span className="text-xs text-destructive">Nie udało się zapisać notatki</span>))
+    if (pending) {
+      delete failedNotes.current[pending.id]           // nowszy tekst zastępuje nieudany starszy
+      sendNotes(pending.id, pending.text, leaving)
+    }
+    if (leaving) {
+      if (retryTimer.current) clearTimeout(retryTimer.current)
+      retryTimer.current = null
+      for (const [id, text] of Object.entries(failedNotes.current)) sendNotes(Number(id), text, true)
+    }
   }
 
   function changeNotes(text: string) {
@@ -134,15 +169,23 @@ export default function Sesja() {
     setNotes(text)
     pendingNotes.current = { id: task.id, text }
     if (notesTimer.current) clearTimeout(notesTimer.current)
-    notesTimer.current = setTimeout(saveNotes, 1000)
+    notesTimer.current = setTimeout(() => saveNotesRef.current(), 1000)
   }
 
-  // Wyjście z ekranu (np. „Zakończ sesję”) — oczekująca notatka nie może zginąć
+  // Wyjście z ekranu (np. „Zakończ sesję”) i zamykanie karty — oczekująca notatka nie może zginąć,
+  // a ewentualny błąd nie może trafić do nagłówka innego ekranu
   const saveNotesRef = useRef(saveNotes)
   saveNotesRef.current = saveNotes
-  useEffect(() => () => {
-    saveNotesRef.current()
-    setHeaderStatus(null)
+  useEffect(() => {
+    mounted.current = true
+    const onPageHide = () => saveNotesRef.current(true)
+    window.addEventListener("pagehide", onPageHide)
+    return () => {
+      window.removeEventListener("pagehide", onPageHide)
+      saveNotesRef.current(true)
+      mounted.current = false
+      setHeaderStatus(null)
+    }
   }, [setHeaderStatus])
 
   // 5. Uruchamianie testów (przycisk i Ctrl/⌘+Enter)
@@ -201,6 +244,8 @@ export default function Sesja() {
         hint_used: hintUsed,
         solution_used: solutionUsed,
       })
+      // Zadanie czyścimy razem z kolejką — panel oceny znika od razu (bez okna na drugi zapis)
+      setTask(null)
       setQueue((q) => (q ? (rating === "again" ? [...q.slice(1), q[0]] : q.slice(1)) : q))
       if (rating !== "again") setCompleted((n) => n + 1)
       setTurn((n) => n + 1)

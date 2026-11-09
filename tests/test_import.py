@@ -99,3 +99,26 @@ def test_seed_defaults(tmp_path, db):
     import_seed(str(path), db, NOW)
     task = get_task(db, list_tasks(db, TODAY)["items"][0]["id"], TODAY)
     assert task["difficulty"] == "easy" and task["tags"] == []
+
+
+def test_import_seed_skips_invalid(tmp_path, db, capsys):          # Etap 6: import przechodzi tę samą walidację co formularz
+    import json
+    seed = tmp_path / "seed.json"
+    good = {"title": "Dobre", "language": "python", "kind": "function", "description": "d", "solution": "s",
+            "tests": [{"input": "f()", "expected": "1"}]}
+    bad = {**good, "title": "Bez testów", "tests": []}
+    seed.write_text(json.dumps([good, bad]), encoding="utf-8")
+    assert import_seed(str(seed), db, NOW) == (1, 1)
+    assert [item["title"] for item in list_tasks(db, date(2026, 11, 9))["items"]] == ["Dobre"]
+    assert "Pominięto „Bez testów”: Dodaj co najmniej jeden test" in capsys.readouterr().out
+
+
+def test_import_v2_skips_invalid(old_db, db, capsys):
+    con = sqlite3.connect(old_db)
+    con.execute("""INSERT INTO tasks VALUES (3, '   ', 'python', 'function', 'Pusty tytuł.', '', '', 's',
+                   '2026-11-03T10:00:00', 0, '2026-11-03')""")
+    con.execute("INSERT INTO tests VALUES (4, 3, 0, 'f()', '1')")
+    con.commit()
+    con.close()
+    assert import_v2(old_db, db, NOW) == (2, 1)
+    assert "Pole nie może być puste" in capsys.readouterr().out

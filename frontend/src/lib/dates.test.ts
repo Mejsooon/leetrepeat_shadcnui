@@ -1,4 +1,4 @@
-import { daysAgo, formatDuration, inDays, longDate, relativeDay, shortDate, todayIso } from "@/lib/dates"
+import { chartDayLabel, daysAgo, formatDuration, inDays, longDate, relativeDay, shortDate, todayIso } from "@/lib/dates"
 
 afterEach(() => vi.useRealTimers())
 
@@ -35,4 +35,9 @@ it("shortDate i daysAgo", () => {
   expect(shortDate("2026-11-09", true)).toBe("9 lis 2026")
   expect(daysAgo(13)).toBe("2026-10-27")
   expect(daysAgo(0)).toBe("2026-11-09")
+})
+
+it("chartDayLabel", () => {
+  expect(chartDayLabel("2026-11-09", false)).toBe("9")
+  expect(chartDayLabel("2026-11-09", true)).toBe("9 lis")
 })

@@ -29,7 +29,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (response.ok) throw new ApiError(response.status, "Nieprawidłowa odpowiedź serwera")
   }
   if (!response.ok) {
-    const detail = typeof data?.detail === "string" ? data.detail : `Błąd ${response.status}`
+    // detail to tekst; lista (stary format Pydantica) → pierwszy komunikat
+    let detail = `Błąd ${response.status}`
+    if (typeof data?.detail === "string") detail = data.detail
+    else if (Array.isArray(data?.detail) && typeof data.detail[0]?.msg === "string") detail = data.detail[0].msg
     throw new ApiError(response.status, detail)
   }
   return data as T
@@ -130,8 +133,9 @@ export function deleteTask(id: number): Promise<null> {
   return request<null>(`/tasks/${id}`, { method: "DELETE" })
 }
 
-export function updateNotes(id: number, notes: string): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>(`/tasks/${id}/notes`, { method: "PATCH", body: JSON.stringify({ notes }) })
+// keepalive: żądanie dokończy się nawet przy zamykaniu karty
+export function updateNotes(id: number, notes: string, keepalive = false): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/tasks/${id}/notes`, { method: "PATCH", body: JSON.stringify({ notes }), keepalive })
 }
 
 export function listTags(): Promise<Tag[]> {
@@ -210,8 +214,16 @@ export type Stats = {
   recent_days: RecentDay[]
 }
 
+// Panel boczny i Pulpit pytają o to samo w tej samej chwili — równoczesne wywołania dzielą jedno żądanie
+let dashboardInFlight: Promise<Dashboard> | null = null
+
 export function getDashboard(): Promise<Dashboard> {
-  return request<Dashboard>("/dashboard")
+  if (!dashboardInFlight) {
+    dashboardInFlight = request<Dashboard>("/dashboard").finally(() => {
+      dashboardInFlight = null
+    })
+  }
+  return dashboardInFlight
 }
 
 export function getStats(from: string, to: string): Promise<Stats> {

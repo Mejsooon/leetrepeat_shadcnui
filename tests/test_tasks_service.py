@@ -146,3 +146,11 @@ def test_last_reviewed_at(db):
     add_review(db, task_id, "2026-11-05T09:00:00")
     add_review(db, task_id, "2026-11-08T09:00:00")
     assert get_task(db, task_id, TODAY)["last_reviewed_at"] == "2026-11-08T09:00:00"
+
+
+def test_search_percent_and_underscore_literal(db):                  # Etap 6: % i _ nie są wieloznacznikami
+    for title in ("100% pewne", "1000 zadań", "a_b", "axb"):
+        create_task(db, make(title=title), NOW)
+    titles = lambda q: sorted(item["title"] for item in list_tasks(db, TODAY, q=q)["items"])  # noqa: E731
+    assert titles("%") == ["100% pewne"]
+    assert titles("a_b") == ["a_b"]

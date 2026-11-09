@@ -160,7 +160,8 @@ export default function Pulpit() {
           {data.queue.length > 0 && (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                {variant === "plan" ? (
+                {/* „Dziś w kolejce”, gdy lista to dzisiejsza sesja (także nowe zadania po „wszystko zrobione”) */}
+                {data.session_count > 0 ? (
                   <>
                     <CardTitle>Dziś w kolejce</CardTitle>
                     <Link to="/zadania" className="text-sm text-muted-foreground underline-offset-4 hover:underline">Zobacz wszystkie</Link>

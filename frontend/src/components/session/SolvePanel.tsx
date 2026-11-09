@@ -7,6 +7,7 @@ import { TestResults } from "@/components/TestResults"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
+import { modKey } from "@/lib/platform"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -90,7 +91,7 @@ export function SolvePanel(props: Props) {
             <Play /> {props.running ? "Uruchamianie…" : "Uruchom testy"}
           </Button>
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Kbd>Ctrl</Kbd> + <Kbd>Enter</Kbd>
+            <Kbd>{modKey()}</Kbd> + <Kbd>Enter</Kbd>
           </span>
         </div>
 

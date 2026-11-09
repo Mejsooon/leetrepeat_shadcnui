@@ -29,6 +29,8 @@ def session_rows(con: sqlite3.Connection, today: str, language: str | None) -> l
                WHERE (? IS NULL OR t.language = ?)
            )
            WHERE (reviewed = 1 AND due_date <= ?) OR reviewed = 0
+           -- reviewed DESC dzieli wynik na dwie grupy (najpierw oceniane, potem nowe), więc CASE
+           -- porównuje due_date tylko z due_date, a created_at tylko z created_at
            ORDER BY reviewed DESC,
                     CASE WHEN reviewed = 1 THEN due_date ELSE created_at END,
                     id""",

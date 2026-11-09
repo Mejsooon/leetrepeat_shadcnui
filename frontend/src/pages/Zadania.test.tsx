@@ -138,3 +138,11 @@ it("błąd runtimes nie psuje listy", async () => {
   expect(await screen.findByText("Merge Intervals")).toBeInTheDocument()
   expect(screen.queryByText("Niedostępne")).not.toBeInTheDocument()
 })
+
+it("zła strona w adresie wraca do 1", async () => {                   // Etap 6
+  const fetchMock = stubApi({ "/api/tasks": LIST, "/api/tags": [] })
+  renderApp("/zadania?page=abc")
+  expect(await screen.findByText("Merge Intervals")).toBeInTheDocument()
+  const listCalls = fetchMock.mock.calls.map((c) => c[0]).filter((u) => u.startsWith("/api/tasks?"))
+  expect(listCalls.every((u) => u.includes("page=1"))).toBe(true)
+})

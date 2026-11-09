@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LANGUAGE_LABEL } from "@/labels"
-import { daysAgo, formatDuration, longDate, parseLocalDate, shortDate, todayIso } from "@/lib/dates"
+import { chartDayLabel, daysAgo, formatDuration, longDate, parseLocalDate, shortDate, todayIso } from "@/lib/dates"
 import { plural } from "@/lib/plural"
 import { cn } from "@/lib/utils"
 
@@ -32,13 +32,21 @@ export default function Statystyki() {
   const [loadedAt, setLoadedAt] = useState<Date | null>(null)
 
   useEffect(() => {
+    // Przy szybkim przełączaniu okresu spóźniona odpowiedź starego okresu jest ignorowana
+    let cancelled = false
     setError(null)
     getStats(from, to)
       .then((s) => {
+        if (cancelled) return
         setData(s)
         setLoadedAt(new Date())
       })
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Brak połączenia z aplikacją"))
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : "Brak połączenia z aplikacją")
+      })
+    return () => {
+      cancelled = true
+    }
   }, [from, to])
 
   // „27 paź – 9 lis 2026” (rok przy początku tylko, gdy inny niż przy końcu)
@@ -157,11 +165,18 @@ export default function Statystyki() {
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
                 <ChartContainer config={CHART} className="aspect-auto h-56 w-full">
-                  <BarChart data={data.daily.map((d) => ({ ...d, day: String(parseLocalDate(d.date).getDate()) }))}>
+                  <BarChart data={data.daily.map((d) => ({ ...d, day: chartDayLabel(d.date, days > 31) }))}>
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="day" tickLine={false} axisLine={false} />
                     <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartTooltip
+                      content={<ChartTooltipContent
+                        labelFormatter={(_, payload) => {
+                          const date = payload?.[0]?.payload?.date as string | undefined
+                          return date ? longDate(date, false) : ""
+                        }}
+                      />}
+                    />
                     <Bar dataKey="python" stackId="a" fill="var(--color-python)" />
                     <Bar dataKey="csharp" stackId="a" fill="var(--color-csharp)" radius={[4, 4, 0, 0]} />
                   </BarChart>
