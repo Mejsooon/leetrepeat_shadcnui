@@ -8,9 +8,10 @@ Warstwy backendu (folder backend/):
 Frontend: zbudowany React w frontend/dist (zmiany: cd frontend && npm run build)
 """
 import os
+from urllib.parse import urlsplit
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -35,6 +36,19 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
     # Tylko adresy lokalne: strona z internetu podszywająca się pod 127.0.0.1 (DNS rebinding)
     # dostanie 400 i nie uruchomi kodu na tym komputerze
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
+
+    # Obca strona może wysłać POST na 127.0.0.1 z prawdziwym nagłówkiem Host (np. fetch "no-cors").
+    # Przeglądarka dokleja wtedy Origin / Sec-Fetch-Site — po nich odrzucamy każdą zmianę danych i /api/run.
+    @app.middleware("http")
+    async def block_cross_site(request: Request, call_next):
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/"):
+            origin = request.headers.get("origin")
+            origin_host = urlsplit(origin).hostname if origin else None
+            cross_site = request.headers.get("sec-fetch-site") == "cross-site"
+            if cross_site or (origin is not None and origin_host not in ("127.0.0.1", "localhost")):
+                return JSONResponse({"detail": "Żądanie z innej strony zostało zablokowane"}, status_code=403)
+        return await call_next(request)
+
     app.include_router(create_router(db_path))
 
     dist_dir = os.path.abspath(dist_dir)

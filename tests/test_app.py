@@ -40,3 +40,44 @@ def test_path_traversal_not_served(client, tmp_path):
     (tmp_path / "sekret.txt").write_text("tajne", encoding="utf-8")
     r = client.get("/..%2Fsekret.txt")
     assert "tajne" not in r.text
+
+
+# --- Review Focus 1 (Etap 3): obca strona nie może uruchomić kodu ani zmienić danych ---
+BLOCKED = "Żądanie z innej strony zostało zablokowane"
+RUN = {"language": "python", "kind": "function", "code": "def f():\n    return 1",
+       "tests": [{"input": "f()", "expected": "1"}]}
+
+
+def counting_runner(monkeypatch):
+    from backend.api import routes
+    calls = []
+    monkeypatch.setattr(routes, "run_tests", lambda *a, **k: calls.append(1) or [])
+    return calls
+
+
+def test_cross_site_post_blocked(client, monkeypatch):
+    calls = counting_runner(monkeypatch)
+    response = client.post("/api/run", json=RUN, headers={"Origin": "http://evil.example"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == BLOCKED
+    assert calls == []
+
+
+def test_null_origin_blocked(client, monkeypatch):
+    calls = counting_runner(monkeypatch)
+    assert client.post("/api/run", json=RUN, headers={"Origin": "null"}).status_code == 403
+    assert calls == []
+
+
+def test_sec_fetch_site_cross_site_blocked(client):
+    assert client.delete("/api/tasks/1", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+
+
+def test_same_origin_allowed(client, monkeypatch):
+    counting_runner(monkeypatch)
+    for origin in ("http://127.0.0.1:8000", "http://localhost:5173"):
+        assert client.post("/api/run", json=RUN, headers={"Origin": origin}).status_code == 200
+
+
+def test_get_with_foreign_origin_allowed(client):
+    assert client.get("/api/health", headers={"Origin": "http://evil.example"}).status_code == 200
