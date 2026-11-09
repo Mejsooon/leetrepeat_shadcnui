@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from backend.api.schemas import NotesIn, ReviewIn, RunIn, TaskIn
 from backend.core.database import connect
 from backend.services import scheduler
+from backend.services import stats as stats_service
 from backend.services import tasks as task_service
 from backend.services.runner import RuntimeMissing, run_tests
 
@@ -99,6 +100,15 @@ def create_router(db_path: str) -> APIRouter:
         con = connect(db_path)
         try:
             return task_service.list_tags(con)
+        finally:
+            con.close()
+
+    # Pulpit: liczby, kolejka na dziś, postęp według języka
+    @router.get("/dashboard")
+    def dashboard(language: Literal["python", "csharp"] | None = None):
+        con = connect(db_path)
+        try:
+            return stats_service.dashboard(con, date.today(), language)
         finally:
             con.close()
 
