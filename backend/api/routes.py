@@ -1,12 +1,18 @@
 """Endpointy HTTP pod /api. Każdy otwiera bazę, woła serwis i zwraca odpowiedź."""
+import os
+import tempfile
 import time
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from backend.api.schemas import NotesIn, ReviewIn, RunIn, SettingsIn, TaskIn
 from backend.core.database import connect
+from backend.services import backup as backup_service
 from backend.services import scheduler
 from backend.services import settings as settings_service
 from backend.services import stats as stats_service
@@ -137,7 +143,7 @@ def create_router(db_path: str) -> APIRouter:
     def get_settings():
         con = connect(db_path)
         try:
-            return settings_service.get_settings(con)
+            return settings_service.get_settings(con, db_path)
         finally:
             con.close()
 
@@ -145,7 +151,7 @@ def create_router(db_path: str) -> APIRouter:
     def put_settings(body: SettingsIn):
         con = connect(db_path)
         try:
-            result = settings_service.save_settings(con, body.model_dump())
+            result = settings_service.save_settings(con, body.model_dump(), db_path)
             con.commit()
             return result
         finally:
@@ -158,6 +164,34 @@ def create_router(db_path: str) -> APIRouter:
             return settings_service.check_runtimes(con)
         finally:
             con.close()
+
+    # Kopia zapasowa: spójna kopia bazy jako plik do pobrania
+    @router.get("/backup")
+    def download_backup():
+        fd, temp_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        backup_service.export_copy(db_path, temp_path)
+        now = datetime.now()
+        con = connect(db_path)
+        try:
+            settings_service.mark_backup(con, now)
+            con.commit()
+        finally:
+            con.close()
+        return FileResponse(temp_path, media_type="application/octet-stream",
+                            filename=f"leetrepeat-{now.date().isoformat()}.db",
+                            background=BackgroundTask(os.remove, temp_path))
+
+    # Przywrócenie: ciało żądania = bajty pliku .db; zły plik → 409, dane nietknięte
+    @router.post("/backup/restore")
+    async def restore_backup(request: Request):
+        data = await request.body()
+        if len(data) > backup_service.MAX_RESTORE_BYTES:
+            raise HTTPException(413, "Plik jest za duży")
+        try:
+            return await run_in_threadpool(backup_service.restore, db_path, data, datetime.now())
+        except ValueError as error:
+            raise HTTPException(409, str(error))
 
     # Kolejka sesji: najpierw „Do powtórki”, potem „Nowe” (spec §4)
     @router.get("/session")

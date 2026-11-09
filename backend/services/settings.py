@@ -1,9 +1,11 @@
 """Ustawienia (spec §3 settings): ścieżki i limity Pythona / .NET, sprawdzanie środowiska."""
 import functools
+import os
 import shutil
 import sqlite3
 import subprocess
 import sys
+from datetime import datetime
 
 from backend.repository import settings as repo
 
@@ -42,7 +44,7 @@ def defaults() -> dict:
     return {"python_path": detect_python(), "dotnet_path": "dotnet", "python_timeout_s": 5, "csharp_timeout_s": 20}
 
 
-def get_settings(con: sqlite3.Connection) -> dict:
+def get_settings(con: sqlite3.Connection, db_path: str | None = None) -> dict:
     stored = repo.get_all(con)
     values = defaults()
     for key in PATH_KEYS:
@@ -51,12 +53,21 @@ def get_settings(con: sqlite3.Connection) -> dict:
     for key in TIMEOUT_KEYS:
         if stored.get(key, "").isdigit():
             values[key] = int(stored[key])
-    return {"values": values, "defaults": defaults()}
+    result = {"values": values, "defaults": defaults()}
+    if db_path is not None:
+        # Informacje o pliku bazy dla karty „Kopia zapasowa”
+        result["database"] = {"path": os.path.abspath(db_path), "task_count": repo.task_count(con),
+                              "last_backup_at": stored.get("last_backup_at")}
+    return result
 
 
-def save_settings(con: sqlite3.Connection, values: dict) -> dict:
+def save_settings(con: sqlite3.Connection, values: dict, db_path: str | None = None) -> dict:
     repo.set_many(con, {key: str(values[key]) for key in PATH_KEYS + TIMEOUT_KEYS})
-    return get_settings(con)
+    return get_settings(con, db_path)
+
+
+def mark_backup(con: sqlite3.Connection, when: datetime) -> None:
+    repo.set_many(con, {"last_backup_at": when.isoformat(timespec="seconds")})
 
 
 def runner_options(con: sqlite3.Connection, language: str) -> dict:
