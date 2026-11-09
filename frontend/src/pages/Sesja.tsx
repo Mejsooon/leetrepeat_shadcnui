@@ -120,10 +120,12 @@ export default function Sesja() {
   //    zadania) i jest ponawiany co 5 s. Przy wyjściu z ekranu i zamykaniu karty — zapis z keepalive, bez statusu.
   const mounted = useRef(true)
   const failedNotes = useRef<Record<number, string>>({})
+  const lastSent = useRef<Record<number, string>>({})           // ostatnio wysłany tekst każdego zadania
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function sendNotes(id: number, text: string, leaving: boolean) {
     if (!leaving) setHeaderStatus(<span className="text-xs text-muted-foreground">Zapisywanie…</span>)
+    lastSent.current[id] = text
     updateNotes(id, text, leaving)
       .then(() => {
         // Udało się — chyba że w międzyczasie ten sam zapis znów się nie powiódł z nowszym tekstem
@@ -132,8 +134,10 @@ export default function Sesja() {
       })
       .catch(() => {
         if (leaving || !mounted.current) return
-        // Nowszy tekst tego zadania (wpisany w międzyczasie) ma pierwszeństwo przed ponowieniem starego
-        if (pendingNotes.current?.id !== id) failedNotes.current[id] = text
+        // Ponawiamy tylko najnowszy wysłany tekst — gdy w międzyczasie poszedł (albo czeka) nowszy,
+        // stary błąd nie może go nadpisać
+        if (lastSent.current[id] !== text || pendingNotes.current?.id === id) return
+        failedNotes.current[id] = text
         setHeaderStatus(<span className="text-xs text-destructive">Nie udało się zapisać notatki — ponowię za chwilę</span>)
         if (!retryTimer.current) retryTimer.current = setTimeout(retryFailedNotes, 5000)
       })

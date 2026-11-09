@@ -73,11 +73,23 @@ def test_sec_fetch_site_cross_site_blocked(client):
     assert client.delete("/api/tasks/1", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
 
 
-def test_own_port_and_vite_allowed(client, monkeypatch):          # Etap 6, Review Focus 1
-    # Klient testowy wysyła Host "127.0.0.1" (port 80) — własny port to 80, plus serwer Vite 5173
+def test_own_port_allowed(client, monkeypatch):                    # Etap 6, Review Focus 1
+    # Klient testowy wysyła Host "127.0.0.1" (port 80) — własny port to 80
     counting_runner(monkeypatch)
-    for origin in ("http://127.0.0.1", "http://localhost", "http://localhost:5173"):
+    for origin in ("http://127.0.0.1", "http://localhost"):
         assert client.post("/api/run", json=RUN, headers={"Origin": origin}).status_code == 200
+
+
+def test_vite_dev_server_allowed_via_host(client, monkeypatch):
+    # Proxy Vite przekazuje Host "localhost:5173" — ten sam port co Origin, więc przechodzi
+    counting_runner(monkeypatch)
+    response = client.post("/api/run", json=RUN, headers={"Host": "localhost:5173", "Origin": "http://localhost:5173"})
+    assert response.status_code == 200
+
+
+def test_other_app_on_5173_blocked(client):                        # przegląd końcowy: inny projekt Vite na 5173
+    response = client.post("/api/run", json=RUN, headers={"Origin": "http://localhost:5173"})
+    assert response.status_code == 403
 
 
 def test_other_local_port_blocked(client):

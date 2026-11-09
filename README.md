@@ -65,8 +65,8 @@ Otwórz **http://127.0.0.1:8000**. Serwer zatrzymujesz przez `Ctrl+C`.
 Serwer nasłuchuje tylko na `127.0.0.1` i przyjmuje wyłącznie adresy `127.0.0.1` / `localhost` — nikt z sieci
 ani obca strona internetowa nie może wysłać Ci kodu do wykonania. Dodatkowo każde żądanie zmieniające dane
 (w tym uruchomienie testów i pobranie kopii bazy) przysłane z innej strony w przeglądarce (nagłówki `Origin` /
-`Sec-Fetch-Site`) dostaje 403 — także ze strony na innym porcie tego komputera. Dozwolone są tylko port serwera
-(8000) i serwer deweloperski Vite (5173).
+`Sec-Fetch-Site`) dostaje 403 — także ze strony na innym porcie tego komputera. Dozwolony jest tylko port serwera
+(8000); serwer deweloperski Vite (`npm run dev`) też działa, bo przekazuje swój adres.
 
 ## Sesja i skróty
 

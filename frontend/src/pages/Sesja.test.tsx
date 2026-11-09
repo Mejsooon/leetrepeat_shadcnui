@@ -371,3 +371,25 @@ it("po zapisie oceny panel znika od razu", async () => {
   await waitFor(() => expect(screen.queryByRole("button", { name: /Zapisz ocenę/ })).not.toBeInTheDocument())
   expect(screen.getByText("Wczytywanie zadania…")).toBeInTheDocument()
 })
+
+it("starszy nieudany zapis nie nadpisuje nowszej notatki", async () => {   // przegląd końcowy, Important 1
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  let failFirst: () => void = () => {}
+  const fetchMock = stubSession({
+    "PATCH /api/tasks/1/notes": (_url: string, init?: RequestInit) => {
+      const text = JSON.parse(String(init?.body)).notes
+      if (text === "v1") return new Promise((resolve) => { failFirst = () => resolve(new Response("boom", { status: 500 })) })
+      return { ok: true }
+    },
+  })
+  renderApp("/sesja")
+  await screen.findByRole("heading", { name: "Two Sum" })
+  await typeNotes("v1")
+  await act(async () => { vi.advanceTimersByTime(1000) })           // v1 wysłane, wisi
+  fireEvent.change(screen.getByLabelText("Twoje notatki"), { target: { value: "v2" } })
+  await act(async () => { vi.advanceTimersByTime(1000) })           // v2 wysłane i zapisane
+  await act(async () => { failFirst() })                             // dopiero teraz v1 się nie udaje
+  await act(async () => { vi.advanceTimersByTime(6000) })
+  const bodies = callsTo(fetchMock, "PATCH", "/api/tasks/1/notes").map((c) => JSON.parse(String(c[1]?.body)).notes)
+  expect(bodies).toEqual(["v1", "v2"])                                // bez ponowienia starego v1
+})

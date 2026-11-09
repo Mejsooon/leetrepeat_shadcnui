@@ -24,7 +24,7 @@
 
 - Wszystko z Etapów 1–5: `127.0.0.1:8000`, offline, `frontend/dist` commitowany (`npm run build` przed commitem zmian frontendu), polskie teksty, prosty liniowy kod, SQL tylko w `repository/`.
 - Komunikaty błędów walidacji po polsku, bez przedrostka „Value error, ”; `detail` w odpowiedzi 422 to zawsze **tekst** (pierwszy błąd).
-- Dozwolone źródła żądań zmieniających dane: host `127.0.0.1` albo `localhost` i port równy portowi serwera z nagłówka `Host` (domyślnie 80 bez portu) albo `5173` (serwer deweloperski Vite).
+- Dozwolone źródła żądań zmieniających dane: host `127.0.0.1` albo `localhost` i port równy portowi serwera z nagłówka `Host` (domyślnie 80 bez portu). Serwer deweloperski Vite przekazuje Host `localhost:5173`, więc przechodzi tą samą regułą. (Poprawione po przeglądzie końcowym — stała 5173 przepuszczała inne aplikacje na tym porcie.)
 - Każdy drobiazg ma test, który najpierw pada.
 
 ## Review Focus
@@ -89,7 +89,7 @@ def test_stats_only_to(client)     # to=2026-11-14 → daily[0] "2026-11-01"
 - Test: `tests/test_app.py`, `tests/test_backup.py`
 
 **Interfaces:**
-- `block_cross_site`: dla `POST/PUT/PATCH/DELETE` pod `/api/` oraz dodatkowo `GET /api/backup` — 403, gdy `Sec-Fetch-Site == "cross-site"` albo `Origin` istnieje i (host ∉ {`127.0.0.1`, `localhost`} albo port ∉ {port z `Host`, 5173}). Port domyślny przy braku: 80 (http).
+- `block_cross_site`: dla `POST/PUT/PATCH/DELETE` pod `/api/` oraz dodatkowo `GET /api/backup` — 403, gdy `Sec-Fetch-Site == "cross-site"` albo `Origin` istnieje i (host ∉ {`127.0.0.1`, `localhost`} albo port ≠ port z `Host`). Port domyślny przy braku: 80 (http).
 - Trasa frontendu: `@app.api_route("/{path:path}", methods=["GET", "HEAD"])`; gdy ostatni segment ścieżki zawiera kropkę, a pliku w `dist` nie ma → `404` (zwykły tekst „Nie znaleziono”), zamiast `index.html`.
 - `download_backup`: gdy `export_copy` rzuci wyjątek, plik tymczasowy jest usuwany przed ponownym rzuceniem.
 

@@ -62,7 +62,9 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
                     origin_port = parts.port or 80
                 except ValueError:
                     origin_port = None
-                allowed_origin = parts.hostname in ("127.0.0.1", "localhost") and origin_port in (host_port, 5173)
+                # Tylko port samego serwera. Serwer deweloperski Vite przekazuje Host „localhost:5173”,
+                # więc też przechodzi — a inna aplikacja na 5173 (z Hostem serwera) już nie
+                allowed_origin = parts.hostname in ("127.0.0.1", "localhost") and origin_port == host_port
             if cross_site or not allowed_origin:
                 return JSONResponse({"detail": "Żądanie z innej strony zostało zablokowane"}, status_code=403)
         return await call_next(request)
