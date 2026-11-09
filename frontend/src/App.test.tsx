@@ -6,7 +6,7 @@ afterEach(() => {
 })
 
 it.each([
-  ["/", "Pulpit"],
+  ["/", "Dobry dzień na trochę kodu."],
   ["/zadania", "Twoje zadania"],
   ["/zadania/nowe", "Dodaj zadanie"],
   ["/zadania/5/edycja", "Edytuj zadanie"],
@@ -26,6 +26,6 @@ it.each([
 
 it("panel pokazuje liczbę zadań z API", async () => {
   stubApi({ "/api/dashboard": { library_count: 24, streak: 0 } })
-  renderApp("/")
+  renderApp("/ustawienia")       // ekran bez własnych danych — test sprawdza tylko panel boczny
   expect(await screen.findByText("24")).toBeInTheDocument()
 })
