@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Code, HardDrive, Info, Pencil, Plus, Search } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router"
-import { listTags, listTasks, type Difficulty, type Status, type Tag, type TaskList } from "@/api"
+import { getRuntimes, listTags, listTasks, type Difficulty, type Runtimes, type Status, type Tag, type TaskList } from "@/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +36,11 @@ function plural(n: number, one: string, few: string, many: string) {
 export default function Zadania() {
   const [params, setParams] = useSearchParams()
   const [data, setData] = useState<TaskList | null>(null)
+  // Czy Python / .NET są dostępne — bez nich zadania w danym języku dostają plakietkę „Niedostępne”
+  const [runtimes, setRuntimes] = useState<Runtimes | null>(null)
+  useEffect(() => {
+    getRuntimes().then(setRuntimes).catch(() => setRuntimes(null))
+  }, [])
   const [tags, setTags] = useState<Tag[]>([])
   const [search, setSearch] = useState(params.get("q") ?? "")
   const searchRef = useRef<HTMLInputElement>(null)
@@ -272,7 +277,21 @@ export default function Zadania() {
                       <div className="text-xs text-muted-foreground">{task.tags.join(" · ")}</div>
                     )}
                   </TableCell>
-                  <TableCell><Badge variant="outline">{LANGUAGE_LABEL[task.language]}</Badge></TableCell>
+                  <TableCell>
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline">{LANGUAGE_LABEL[task.language]}</Badge>
+                      {runtimes && !runtimes[task.language === "python" ? "python" : "dotnet"].found && (
+                        <Badge variant="outline" className="border-destructive/40 text-destructive" asChild>
+                          <Link
+                            to="/ustawienia"
+                            title={`Nie wykryto ${task.language === "python" ? "Pythona" : ".NET"} — sprawdź Ustawienia`}
+                          >
+                            Niedostępne
+                          </Link>
+                        </Badge>
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell><Badge className={DIFFICULTY_CLASS[task.difficulty]}>{DIFFICULTY_LABEL[task.difficulty]}</Badge></TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">{dueLabel(task.due_date, task.status)}</TableCell>
                   <TableCell><Badge className={STATUS_CLASS[task.status]}>{STATUS_LABEL[task.status]}</Badge></TableCell>

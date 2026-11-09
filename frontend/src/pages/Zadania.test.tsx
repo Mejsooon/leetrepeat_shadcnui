@@ -114,3 +114,27 @@ it("wyszukiwarka czyści się, gdy adres traci filtr q", async () => {          
   })
   await waitFor(() => expect(screen.getByRole("searchbox", { name: "Szukaj zadań" })).toHaveValue(""))
 })
+
+// --- Etap 5: brak środowiska ---
+
+it("plakietka Niedostępne przy zadaniach C# bez .NET", async () => {
+  stubApi({
+    "/api/tasks": LIST, "/api/tags": [],
+    "/api/settings/runtimes": {
+      python: { found: true, version: "Python 3.12.3", path: "/usr/bin/python3" },
+      dotnet: { found: false, version: null, path: "dotnet" },
+    },
+  })
+  renderApp("/zadania")
+  const badge = await screen.findByRole("link", { name: "Niedostępne" })
+  expect(badge).toHaveAttribute("href", "/ustawienia")
+  expect(badge.closest("tr")).toHaveTextContent("Merge Intervals")
+  expect(screen.getAllByRole("link", { name: "Niedostępne" })).toHaveLength(1)
+})
+
+it("błąd runtimes nie psuje listy", async () => {
+  stubApi({ "/api/tasks": LIST, "/api/tags": [], "/api/settings/runtimes": new Response("boom", { status: 500 }) })
+  renderApp("/zadania")
+  expect(await screen.findByText("Merge Intervals")).toBeInTheDocument()
+  expect(screen.queryByText("Niedostępne")).not.toBeInTheDocument()
+})
