@@ -12,10 +12,12 @@ from urllib.parse import urlsplit
 
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from backend.api.errors import polish_message
 from backend.api.routes import create_router
 from backend.core.database import connect
 
@@ -48,6 +50,11 @@ def create_app(db_path: str, dist_dir: str) -> FastAPI:
             if cross_site or (origin is not None and origin_host not in ("127.0.0.1", "localhost")):
                 return JSONResponse({"detail": "Żądanie z innej strony zostało zablokowane"}, status_code=403)
         return await call_next(request)
+
+    # 422 z walidacji: jeden czytelny komunikat po polsku zamiast listy błędów Pydantica
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError):
+        return JSONResponse({"detail": polish_message(exc.errors()[0])}, status_code=422)
 
     app.include_router(create_router(db_path))
 

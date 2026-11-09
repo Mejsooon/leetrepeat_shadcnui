@@ -12,7 +12,8 @@ def task(**changes):
 
 
 def messages(response):
-    return " ".join(e["msg"] for e in response.json()["detail"])
+    # detail 422 to jeden polski komunikat (handler w main.py)
+    return response.json()["detail"]
 
 
 def test_create_get_roundtrip(client):
