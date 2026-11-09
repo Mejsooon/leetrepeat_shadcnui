@@ -27,7 +27,7 @@ it("seria i licznik odświeżają się po zmianie ekranu", async () => {   // Re
   const { router } = renderApp("/zadania")
   expect(await screen.findByText("Twoja seria trwa już 2 dni.")).toBeInTheDocument()
   state.streak = 3
-  await act(() => router.navigate("/ustawienia"))
+  await act(() => router.navigate("/zadania/nowe"))
   expect(await screen.findByText("Twoja seria trwa już 3 dni.")).toBeInTheDocument()
   expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/dashboard").length).toBeGreaterThanOrEqual(2)
 })
@@ -35,9 +35,9 @@ it("seria i licznik odświeżają się po zmianie ekranu", async () => {   // Re
 it("seria 1 dzień i ukrycie przy 0", async () => {
   const state = { streak: 1, library_count: 5 }
   stubDashboard(state)
-  const { router } = renderApp("/zadania")
+  const { router } = renderApp("/zadania/nowe")
   expect(await screen.findByText("Twoja seria trwa już 1 dzień.")).toBeInTheDocument()
   state.streak = 0
-  await act(() => router.navigate("/zadania/nowe"))
+  await act(() => router.navigate("/zadania"))
   await waitFor(() => expect(screen.queryByText(/Twoja seria/)).not.toBeInTheDocument())
 })
