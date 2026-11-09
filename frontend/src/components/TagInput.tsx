@@ -50,6 +50,8 @@ export function TagInput({ value, onChange, suggestions }: {
             if (e.target.value.endsWith(",")) add(e.target.value.slice(0, -1))
             else setText(e.target.value)
           }}
+          // Tag wpisany bez Entera nie ginie — dodajemy go przy wyjściu z pola (np. klik „Zapisz”)
+          onBlur={() => text.trim() && add(text)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault()
@@ -64,6 +66,7 @@ export function TagInput({ value, onChange, suggestions }: {
         <ul role="listbox" aria-label="Podpowiedzi tagów" className="flex flex-wrap gap-1.5">
           {matches.map((s) => (
             <li key={s} role="option" aria-selected="false" tabIndex={0} onClick={() => add(s)}
+              onMouseDown={(e) => e.preventDefault()}
               onKeyDown={(e) => e.key === "Enter" && add(s)}
               className="cursor-pointer rounded-md border px-2 py-0.5 text-xs hover:bg-accent">
               {s}

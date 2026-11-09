@@ -51,14 +51,15 @@ it("zapisuje nowe zadanie i wraca do listy", async () => {
 
 it("pusty tytuł blokuje zapis z komunikatem", async () => {          // Review Focus 4
   const user = userEvent.setup()
-  stubApi({ "/api/tasks": EMPTY_LIST, "/api/tags": [] })
+  const fetchMock = stubApi({ "/api/tasks": EMPTY_LIST, "/api/tags": [] })
   renderApp("/zadania/nowe")
   await screen.findByRole("heading", { level: 1, name: "Dodaj zadanie" })
   await fillValidTask(user)
   await user.clear(screen.getByLabelText("Tytuł zadania"))
   await user.type(screen.getByLabelText("Tytuł zadania"), "   ")
   expect(screen.getByText("Pole nie może być puste")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: /Zapisz zadanie/ })).toBeDisabled()
+  await user.click(screen.getByRole("button", { name: /Zapisz zadanie/ }))
+  expect(calls(fetchMock, "POST")).toHaveLength(0)
 })
 
 it("typ Program zmienia etykiety testów", async () => {
@@ -158,4 +159,35 @@ it("liczba testów jest odmieniona", async () => {
   stubApi({ "/api/tasks/5": { ...TASK, tests }, "/api/tasks": EMPTY_LIST, "/api/tags": [] })
   renderApp("/zadania/5/edycja")
   expect(await screen.findByText("5 przypadków")).toBeInTheDocument()
+})
+
+it("kliknięcie Zapisz przy błędach pokazuje komunikaty przy polach", async () => {   // przegląd: Important 1
+  const user = userEvent.setup()
+  const fetchMock = stubApi({ "/api/tasks": EMPTY_LIST, "/api/tags": [] })
+  renderApp("/zadania/nowe")
+  await user.type(await screen.findByLabelText("Tytuł zadania"), "Coś")
+  await user.click(screen.getByRole("button", { name: /Zapisz zadanie/ }))
+  expect(screen.getAllByText("Pole nie może być puste").length).toBe(2)          // treść i rozwiązanie
+  expect(screen.getByText("Wywołanie funkcji nie może być puste")).toBeInTheDocument()
+  expect(calls(fetchMock, "POST")).toHaveLength(0)
+})
+
+it("błąd wczytywania (np. 500) nie pokazuje pustego formularza", async () => {     // przegląd: Important 2
+  stubApi({ "/api/tasks/5": new Response("Internal Server Error", { status: 500 }), "/api/tasks": EMPTY_LIST, "/api/tags": [] })
+  renderApp("/zadania/5/edycja")
+  expect(await screen.findByText("Nie udało się wczytać zadania")).toBeInTheDocument()
+  expect(screen.queryByLabelText("Tytuł zadania")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /Zapisz zmiany/ })).not.toBeInTheDocument()
+})
+
+it("tag wpisany bez Entera jest dodany po opuszczeniu pola", async () => {        // przegląd: Minor 3 → Important
+  const user = userEvent.setup()
+  const fetchMock = stubApi({ "/api/tasks": EMPTY_LIST, "/api/tags": [] })
+  renderApp("/zadania/nowe")
+  await screen.findByLabelText("Tytuł zadania")
+  await fillValidTask(user)
+  await user.type(screen.getByLabelText("Dodaj tag"), "Stos")
+  await user.click(screen.getByRole("button", { name: /Zapisz zadanie/ }))
+  await waitFor(() => expect(calls(fetchMock, "POST")).toHaveLength(1))
+  expect(JSON.parse(calls(fetchMock, "POST")[0][1]!.body as string).tags).toEqual(["Stos"])
 })

@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,6 +38,8 @@ export default function ZadanieForm() {
   const [form, setForm] = useState<TaskInput>(EMPTY_TASK)
   const [loading, setLoading] = useState(taskId !== null)
   const [notFound, setNotFound] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [preview, setPreview] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -59,7 +61,12 @@ export default function ZadanieForm() {
         setInitial(loaded)
         setForm(loaded)
       })
-      .catch((error) => setNotFound(error instanceof ApiError && error.status === 404))
+      .catch((error) => {
+        // 404 = zadania nie ma; inny błąd (np. serwer nie działa) — nie pokazujemy pustego formularza,
+        // bo zapis nadpisałby prawdziwe zadanie pustymi polami
+        if (error instanceof ApiError && error.status === 404) setNotFound(true)
+        else setLoadError(true)
+      })
       .finally(() => setLoading(false))
   }, [taskId])
 
@@ -101,7 +108,8 @@ export default function ZadanieForm() {
   }
   const hasErrors = Boolean(errors.title || errors.description || errors.solution || errors.tests
     || errors.testInputs.some(Boolean))
-  const show = (field: string) => touched[field]
+  // Komunikat przy polu: gdy pole było ruszone albo po próbie zapisu
+  const show = (field: string) => touched[field] || submitAttempted
 
   function set<K extends keyof TaskInput>(key: K, value: TaskInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -122,6 +130,10 @@ export default function ZadanieForm() {
   }
 
   async function save() {
+    if (hasErrors) {
+      setSubmitAttempted(true)
+      return
+    }
     setSaving(true)
     setSaveError(null)
     try {
@@ -150,6 +162,20 @@ export default function ZadanieForm() {
       </Link>
     </Button>
   )
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col gap-4">
+        {backLink}
+        <h1 className="text-3xl font-semibold tracking-tight">Edytuj zadanie</h1>
+        <Alert variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>Nie udało się wczytać zadania</AlertTitle>
+          <AlertDescription>Sprawdź, czy działa python main.py, i odśwież stronę.</AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
 
   if (notFound) {
     return (
@@ -311,7 +337,7 @@ export default function ZadanieForm() {
                         <X aria-hidden="true" />
                       </Button>
                     </div>
-                    {touched[`test-${i}`] && errors.testInputs[i] && (
+                    {show(`test-${i}`) && errors.testInputs[i] && (
                       <p className="pl-7 text-xs text-destructive">{errors.testInputs[i]}</p>
                     )}
                   </li>
@@ -375,7 +401,7 @@ export default function ZadanieForm() {
           </AlertDialog>
         )}
         <Button asChild variant="outline"><Link to="/zadania">Anuluj</Link></Button>
-        <Button type="button" onClick={save} disabled={hasErrors || saving || loading}>
+        <Button type="button" onClick={save} disabled={saving || loading}>
           <Check aria-hidden="true" />
           {taskId === null ? "Zapisz zadanie" : "Zapisz zmiany"}
         </Button>

@@ -45,11 +45,14 @@ export default function Zadania() {
 
   // Ustawienie jednego filtra w adresie; każda zmiana filtra wraca na stronę 1
   function setFilter(key: string, value: string | null) {
-    const next = new URLSearchParams(params)
-    if (value) next.set(key, value)
-    else next.delete(key)
-    if (key !== "page") next.delete("page")
-    setParams(next, { replace: key === "q" })
+    // Wersja z funkcją: bierze aktualny adres, nawet gdy w międzyczasie zmienił się inny filtr
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      if (value) next.set(key, value)
+      else next.delete(key)
+      if (key !== "page") next.delete("page")
+      return next
+    }, { replace: key === "q" })
   }
 
   // Dane listy przy każdej zmianie filtrów/strony w adresie
@@ -84,6 +87,12 @@ export default function Zadania() {
   useEffect(() => {
     listTags().then(setTags).catch(() => setTags([]))
   }, [])
+
+  // Pole szukania nadąża za adresem (przycisk Wstecz, klik „Zadania” w panelu)
+  const urlQuery = params.get("q") ?? ""
+  useEffect(() => {
+    setSearch(urlQuery)
+  }, [urlQuery])
 
   // Szukanie z opóźnieniem 300 ms, żeby nie pytać serwera przy każdej literze
   useEffect(() => {

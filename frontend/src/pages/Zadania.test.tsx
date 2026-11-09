@@ -104,3 +104,13 @@ it("Następna zmienia stronę w adresie", async () => {
   await userEvent.click(screen.getByRole("button", { name: /Następna/ }))
   await waitFor(() => expect(router.state.location.search).toBe("?page=2"))
 })
+
+it("wyszukiwarka czyści się, gdy adres traci filtr q", async () => {             // przegląd: Minor 9 → Important
+  stubApi({ "/api/tasks": LIST, "/api/tags": [] })
+  const { router } = renderApp("/zadania?q=two")
+  expect(await screen.findByRole("searchbox", { name: "Szukaj zadań" })).toHaveValue("two")
+  await act(async () => {
+    await router.navigate("/zadania")
+  })
+  await waitFor(() => expect(screen.getByRole("searchbox", { name: "Szukaj zadań" })).toHaveValue(""))
+})
