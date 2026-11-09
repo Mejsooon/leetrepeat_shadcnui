@@ -1,7 +1,7 @@
 """Jak wyglądają dane z frontendu (walidacja Pydantic). Komunikaty błędów po polsku."""
 from typing import Literal
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class TestIn(BaseModel):
@@ -50,3 +50,28 @@ class TaskIn(BaseModel):
 
 class NotesIn(BaseModel):
     notes: str
+
+
+class RunIn(BaseModel):
+    language: Literal["python", "csharp"]
+    kind: Literal["function", "program"]
+    code: str = Field(max_length=100_000)
+    tests: list[TestIn] = Field(min_length=1, max_length=50)
+
+
+class ReviewIn(BaseModel):
+    rating: Literal["again", "hard", "good", "easy"]
+    duration_seconds: int = Field(ge=0)
+    tests_passed: int | None = Field(default=None, ge=0)
+    tests_total: int | None = Field(default=None, ge=0)
+    hint_used: bool
+    solution_used: bool
+
+    @model_validator(mode="after")
+    def tests_count_consistent(self):
+        # Albo testów nie uruchomiono (oba None), albo poprawnych jest najwyżej tyle, ile wszystkich
+        if (self.tests_passed is None) != (self.tests_total is None):
+            raise ValueError("Nieprawidłowa liczba testów")
+        if self.tests_passed is not None and self.tests_passed > self.tests_total:
+            raise ValueError("Nieprawidłowa liczba testów")
+        return self

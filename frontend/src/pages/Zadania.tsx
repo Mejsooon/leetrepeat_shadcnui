@@ -9,6 +9,7 @@ import { Kbd } from "@/components/ui/kbd"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DIFFICULTY_LABEL, LANGUAGE_LABEL, STATUS_LABEL } from "@/labels"
+import { relativeDay } from "@/lib/dates"
 
 const PAGE_SIZE = 10
 
@@ -24,7 +25,6 @@ const STATUS_CLASS: Record<Status, string> = {
   consolidated: "bg-success-muted text-success",
   new: "bg-secondary text-secondary-foreground",
 }
-const MONTHS = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"]
 
 // Polska odmiana: 1 zadanie, 2–4 zadania, 5+ zadań (12–14 też „zadań”)
 function plural(n: number, one: string, few: string, many: string) {
@@ -113,15 +113,9 @@ export default function Zadania() {
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-  const today = new Date()
-  const todayIso = today.toISOString().slice(0, 10)
-  const tomorrowIso = new Date(today.getTime() + 86400000).toISOString().slice(0, 10)
   function dueLabel(dueDate: string, status: Status) {
     if (status === "new") return "—"
-    if (dueDate <= todayIso) return "Dzisiaj"
-    if (dueDate === tomorrowIso) return "Jutro"
-    const [y, m, d] = dueDate.split("-").map(Number)
-    return `${d} ${MONTHS[m - 1]} ${y}`
+    return relativeDay(dueDate)
   }
 
   const counts = data?.counts

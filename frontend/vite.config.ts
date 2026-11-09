@@ -22,6 +22,9 @@ function monacoWithoutLanguageServices(): Plugin {
   }
 }
 
+// Testy dat liczą w czasie polskim (wyłapują błędy UTC po północy). Ustawione przed startem workerów.
+process.env.TZ = 'Europe/Warsaw'
+
 export default defineConfig({
   plugins: [monacoWithoutLanguageServices(), react(), tailwindcss()],
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },

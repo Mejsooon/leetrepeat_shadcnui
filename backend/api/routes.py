@@ -1,12 +1,15 @@
 """Endpointy HTTP pod /api. Każdy otwiera bazę, woła serwis i zwraca odpowiedź."""
+import time
 from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
-from backend.api.schemas import NotesIn, TaskIn
+from backend.api.schemas import NotesIn, ReviewIn, RunIn, TaskIn
 from backend.core.database import connect
+from backend.services import scheduler
 from backend.services import tasks as task_service
+from backend.services.runner import RuntimeMissing, run_tests
 
 VERSION = "3.0.0"
 NOT_FOUND = "Nie znaleziono zadania"
@@ -98,5 +101,48 @@ def create_router(db_path: str) -> APIRouter:
             return task_service.list_tags(con)
         finally:
             con.close()
+
+    # Kolejka sesji: najpierw „Do powtórki”, potem „Nowe” (spec §4)
+    @router.get("/session")
+    def session(language: Literal["python", "csharp"] | None = None):
+        con = connect(db_path)
+        try:
+            return scheduler.session_queue(con, date.today(), language)
+        finally:
+            con.close()
+
+    # Uruchamia kod użytkownika na tym komputerze — chronione przez Host i Origin (main.py)
+    @router.post("/run")
+    def run(body: RunIn):
+        tests = [test.model_dump() for test in body.tests]
+        started = time.perf_counter()
+        try:
+            results = run_tests(body.language, body.kind, body.code, tests)
+        except RuntimeMissing as error:
+            raise HTTPException(503, str(error))
+        return {"results": results, "duration_ms": round((time.perf_counter() - started) * 1000)}
+
+    @router.get("/tasks/{task_id}/review-preview")
+    def review_preview(task_id: int):
+        con = connect(db_path)
+        try:
+            preview = scheduler.review_preview(con, task_id, date.today())
+        finally:
+            con.close()
+        if preview is None:
+            raise HTTPException(404, NOT_FOUND)
+        return preview
+
+    @router.post("/tasks/{task_id}/review")
+    def review(task_id: int, body: ReviewIn):
+        con = connect(db_path)
+        try:
+            result = scheduler.submit_review(con, task_id, body.model_dump(), datetime.now().replace(microsecond=0))
+            con.commit()
+        finally:
+            con.close()
+        if result is None:
+            raise HTTPException(404, NOT_FOUND)
+        return result
 
     return router

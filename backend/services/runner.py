@@ -131,7 +131,7 @@ def run_tests(language: str, kind: str, code: str, tests: list[dict],
             if outcome is None:
                 for test in tests:
                     results.append({"status": "timeout", "input": test["input"], "expected": test["expected"],
-                                    "actual": None, "message": f"Przekroczono limit czasu ({time_limit} s)"})
+                                    "actual": None, "message": f"Kod działał dłużej niż {time_limit} s"})
                 return results
             returncode, stdout, stderr = outcome
 
@@ -191,7 +191,7 @@ def run_tests(language: str, kind: str, code: str, tests: list[dict],
             outcome = run_process(test["input"], tmp)
             if outcome is None:
                 result["status"] = "timeout"
-                result["message"] = f"Przekroczono limit czasu ({time_limit} s)"
+                result["message"] = f"Kod działał dłużej niż {time_limit} s"
                 results.append(result)
                 continue
             returncode, stdout, stderr = outcome

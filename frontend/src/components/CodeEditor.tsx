@@ -11,6 +11,8 @@ export type CodeEditorProps = {
   ariaLabel: string
   height?: number
   readOnly?: boolean
+  // Ctrl/⌘+Enter wewnątrz edytora (np. „Uruchom testy”)
+  onCtrlEnter?: () => void
 }
 
 const RUNTIME_LABEL = { python: "Python 3.12 · UTF-8", csharp: "C# · .NET 10", plaintext: "Tekst" }
@@ -24,6 +26,12 @@ export function CodeEditor(props: CodeEditorProps) {
       value={props.value}
       readOnly={props.readOnly}
       onChange={(e) => props.onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && props.onCtrlEnter) {
+          e.preventDefault()
+          props.onCtrlEnter()
+        }
+      }}
       spellCheck={false}
       style={{ height }}
       className="block w-full resize-none bg-transparent p-3 font-mono text-[13px] leading-5 outline-none"
