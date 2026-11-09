@@ -47,3 +47,18 @@ it("pisanie w zapasowym polu wywołuje onChange", async () => {
   await userEvent.type(screen.getByLabelText("Rozwiązanie"), "x")
   expect(onChange).toHaveBeenLastCalledWith("def f():\nx")
 })
+
+it("Ctrl+Enter w polu tekstowym woła onCtrlEnter", async () => {
+  mockMatchMedia(false)
+  const onCtrlEnter = vi.fn()
+  const onChange = vi.fn()
+  render(
+    <ThemeProvider>
+      <CodeEditor value="x = 1" onChange={onChange} onCtrlEnter={onCtrlEnter} language="python" fileName="a.py" ariaLabel="Kod" />
+    </ThemeProvider>,
+  )
+  await userEvent.click(screen.getByLabelText("Kod"))
+  await userEvent.keyboard("{Control>}{Enter}{/Control}")
+  expect(onCtrlEnter).toHaveBeenCalledTimes(1)
+  expect(onChange).not.toHaveBeenCalled()
+})

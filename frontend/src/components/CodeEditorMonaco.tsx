@@ -1,4 +1,5 @@
 import Editor, { loader } from "@monaco-editor/react"
+import { useEffect, useRef } from "react"
 import * as monaco from "monaco-editor"
 import EditorWorker from "monaco-editor/editor/editor.worker?worker"
 import type { CodeEditorProps } from "@/components/CodeEditor"
@@ -11,6 +12,11 @@ loader.config({ monaco })
 
 export default function CodeEditorMonaco(props: CodeEditorProps & { height: number }) {
   const { resolved } = useTheme()
+  // Skrót rejestrujemy raz przy starcie edytora — ref trzyma zawsze najnowszą funkcję z props
+  const onCtrlEnter = useRef(props.onCtrlEnter)
+  useEffect(() => {
+    onCtrlEnter.current = props.onCtrlEnter
+  })
   return (
     <Editor
       height={props.height}
@@ -18,6 +24,9 @@ export default function CodeEditorMonaco(props: CodeEditorProps & { height: numb
       value={props.value}
       onChange={(value) => props.onChange(value ?? "")}
       theme={resolved === "dark" ? "vs-dark" : "vs"}
+      onMount={(editor) => {
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onCtrlEnter.current?.())
+      }}
       options={{
         ariaLabel: props.ariaLabel,
         readOnly: props.readOnly,
