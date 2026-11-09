@@ -17,6 +17,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from backend.core.database import connect  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
+
+from backend.api.errors import polish_message  # noqa: E402
+from backend.api.schemas import TaskIn  # noqa: E402
 from backend.services.tasks import create_task  # noqa: E402
 
 
@@ -33,11 +37,19 @@ def import_v2(old_db_path: str, new_con: sqlite3.Connection, now: datetime) -> t
             continue
         tests = [dict(t) for t in old.execute(
             "SELECT input, expected FROM tests WHERE task_id = ? ORDER BY position", (task["id"],))]
-        create_task(new_con, {
+        data = {
             "title": task["title"], "language": task["language"], "kind": task["kind"], "difficulty": "easy",
             "description": task["description"], "starter_code": task["starter_code"], "hint": task["hint"],
             "solution": task["solution"], "tests": tests, "tags": [],
-        }, now)
+        }
+        # Ta sama walidacja co w formularzu — niepoprawne zadanie pomijamy z komunikatem
+        try:
+            TaskIn(**data)
+        except ValidationError as error:
+            print(f"Pominięto „{task['title']}”: {polish_message(error.errors()[0])}")
+            skipped += 1
+            continue
+        create_task(new_con, data, now)
         imported += 1
     old.close()
     new_con.commit()

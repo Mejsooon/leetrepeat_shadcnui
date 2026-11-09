@@ -19,6 +19,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from backend.core.database import connect  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
+
+from backend.api.errors import polish_message  # noqa: E402
+from backend.api.schemas import TaskIn  # noqa: E402
 from backend.services.tasks import create_task  # noqa: E402
 
 
@@ -32,12 +36,20 @@ def import_seed(json_path: str, con: sqlite3.Connection, now: datetime) -> tuple
         if exists:
             skipped += 1
             continue
-        create_task(con, {
+        data = {
             "title": task["title"], "language": task["language"], "kind": task["kind"],
             "difficulty": task.get("difficulty", "easy"), "description": task["description"],
             "starter_code": task.get("starter_code", ""), "hint": task.get("hint", ""),
             "solution": task["solution"], "tests": task["tests"], "tags": task.get("tags", []),
-        }, now)
+        }
+        # Ta sama walidacja co w formularzu — niepoprawne zadanie pomijamy z komunikatem
+        try:
+            TaskIn(**data)
+        except ValidationError as error:
+            print(f"Pominięto „{task['title']}”: {polish_message(error.errors()[0])}")
+            skipped += 1
+            continue
+        create_task(con, data, now)
         imported += 1
     con.commit()
     return imported, skipped
