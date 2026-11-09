@@ -6,12 +6,12 @@ afterEach(() => {
 })
 
 it.each([
-  ["/", "Pulpit"],
+  ["/", "Dobry dzień na trochę kodu."],
   ["/zadania", "Twoje zadania"],
   ["/zadania/nowe", "Dodaj zadanie"],
   ["/zadania/5/edycja", "Edytuj zadanie"],
   ["/sesja?zadanie=5", "Two Sum"],
-  ["/statystyki", "Statystyki"],
+  ["/statystyki", "Zobacz, jak rośniesz."],
   ["/ustawienia", "Ustawienia"],
 ])("trasa %s pokazuje ekran %s", async (path, heading) => {
   stubApi({ "/api/tasks?": EMPTY_LIST, "/api/tasks": EMPTY_LIST, "/api/health": { status: "ok", version: "3.0.0" },
@@ -25,7 +25,7 @@ it.each([
 })
 
 it("panel pokazuje liczbę zadań z API", async () => {
-  stubApi({ "/api/tasks": { ...EMPTY_LIST, counts: { library: 24, due: 0, new: 0 } } })
-  renderApp("/")
+  stubApi({ "/api/dashboard": { library_count: 24, streak: 0 } })
+  renderApp("/ustawienia")       // ekran bez własnych danych — test sprawdza tylko panel boczny
   expect(await screen.findByText("24")).toBeInTheDocument()
 })

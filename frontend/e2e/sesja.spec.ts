@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 
-// Cała sesja na prawdziwym serwerze: edytor → testy → ocena → Pulpit, w obu motywach
+// Cała ścieżka na prawdziwym serwerze (spec §8): Pulpit → sesja → testy → ocena → Pulpit → Statystyki, w obu motywach
 
 // Test biblioteki zakłada pustą bazę — usuwamy swoje zadania, także gdy test padnie
 const createdIds: number[] = []
@@ -21,7 +21,11 @@ for (const theme of ["light", "dark"]) {
     const { id } = await created.json()
     createdIds.push(id)
 
-    await page.goto(`/sesja?zadanie=${id}`)
+    // Pulpit: jedno nowe zadanie = jeden krok
+    await page.goto("/")
+    await expect(page.getByText("1 mały krok. Wiedza na dłużej.")).toBeVisible()
+    await page.getByRole("link", { name: "Zacznij powtórkę" }).click()
+    await expect(page).toHaveURL(/\/sesja$/)
     await expect(page.getByRole("heading", { level: 1, name: `Suma ${theme}` })).toBeVisible()
     await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark)/)
 
@@ -47,6 +51,13 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByText("Sesja zakończona")).toBeVisible()
     await page.getByRole("button", { name: "Wróć na Pulpit" }).click()
     await expect(page).toHaveURL("http://127.0.0.1:8000/")
+    await expect(page.getByText("Wszystko zrobione na dziś")).toBeVisible()
+    await expect(page.getByText("Twoja seria trwa już 1 dzień.")).toBeVisible()
+
+    // Statystyki widzą tę jedną ocenę
+    await page.getByRole("link", { name: "Statystyki" }).click()
+    const reviewsCard = page.locator("[data-slot=card]").filter({ hasText: "Wykonane powtórki" })
+    await expect(reviewsCard.getByText("1", { exact: true })).toBeVisible()
 
     const saved = await (await request.get(`/api/tasks/${id}`)).json()
     expect(saved.status).toBe("learning")

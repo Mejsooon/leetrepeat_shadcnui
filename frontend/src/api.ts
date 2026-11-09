@@ -171,3 +171,49 @@ export function getReviewPreview(id: number): Promise<ReviewPreviewItem[]> {
 export function submitReview(id: number, input: ReviewInput): Promise<{ interval_days: number; due_date: string }> {
   return request(`/tasks/${id}/review`, { method: "POST", body: JSON.stringify(input) })
 }
+
+// --- Pulpit i Statystyki (Etap 4) ---
+
+export type ByLanguage<T> = { python: T; csharp: T }
+export type DashboardQueueItem = { id: number; title: string; language: Language; difficulty: Difficulty; due_date: string }
+export type LanguageProgress = { language: Language; consolidated: number; learning: number; new: number }
+export type Dashboard = {
+  due_count: number
+  due_by_language: ByLanguage<number>
+  new_count: number
+  streak: number
+  longest_streak: number
+  library_count: number
+  library_by_language: ByLanguage<number>
+  queue: DashboardQueueItem[]
+  queue_rest: string[]
+  session_count: number
+  progress_by_language: LanguageProgress[]
+  next_review_date: string | null
+  completed_today: number
+}
+
+export type DailyCount = { date: string; python: number; csharp: number }
+export type WeakTask = { id: number; title: string; language: Language; successful: number; total: number }
+export type RecentDay = { date: string; count: number; success_rate: number | null }
+export type Stats = {
+  reviews_count: number
+  by_language: ByLanguage<number>
+  success_rate: number | null
+  success_by_language: ByLanguage<{ successful: number; total: number }>
+  avg_duration_s: number | null
+  avg_duration_by_language: ByLanguage<number | null>
+  streak: number
+  longest_streak: number
+  daily: DailyCount[]
+  weak_tasks: WeakTask[]
+  recent_days: RecentDay[]
+}
+
+export function getDashboard(): Promise<Dashboard> {
+  return request<Dashboard>("/dashboard")
+}
+
+export function getStats(from: string, to: string): Promise<Stats> {
+  return request<Stats>(`/stats?from=${from}&to=${to}`)
+}

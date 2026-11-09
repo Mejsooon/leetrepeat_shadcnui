@@ -9,6 +9,7 @@ import { Kbd } from "@/components/ui/kbd"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { DIFFICULTY_LABEL, LANGUAGE_LABEL } from "@/labels"
 import { formatDuration, inDays, longDate } from "@/lib/dates"
+import { plural } from "@/lib/plural"
 import { cn } from "@/lib/utils"
 
 // Cztery oceny w kolejności klawiszy 1–4 (teksty z designu „Ocena”)
@@ -18,13 +19,6 @@ const OPTIONS: { rating: Rating; label: string; key: string; desc: string; dot: 
   { rating: "good", label: "Dobre", key: "3", desc: "Samodzielnie, po namyśle", dot: "bg-green-600" },
   { rating: "easy", label: "Łatwe", key: "4", desc: "Od razu, bez wahania", dot: "bg-blue-600" },
 ]
-
-// 1 zadanie, 2–4 zadania, 5+ (i 12–14) zadań
-function tasksWord(n: number) {
-  if (n === 1) return "zadanie"
-  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) return "zadania"
-  return "zadań"
-}
 
 type Props = {
   task: Task
@@ -164,7 +158,7 @@ export function RatingPanel(props: Props) {
             {props.nextItem ? (
               <>
                 <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Następne w sesji · pozostanie {props.remainingAfter} {tasksWord(props.remainingAfter)}
+                  Następne w sesji · pozostanie {plural(props.remainingAfter, "zadanie", "zadania", "zadań")}
                 </span>
                 <div className="flex flex-col">
                   <span className="font-medium">{props.nextItem.title}</span>

@@ -6,11 +6,11 @@ test("start, nawigacja, odświeżenie głębokiego linku i motyw", async ({ page
   page.on("request", (r) => requests.push(r.url()))
 
   await page.goto("/")
-  await expect(page.getByRole("heading", { level: 1, name: "Pulpit" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "Dobry dzień na trochę kodu." })).toBeVisible()
 
   await page.getByRole("link", { name: "Statystyki" }).click()
   await page.reload()
-  await expect(page.getByRole("heading", { level: 1, name: "Statystyki" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "Zobacz, jak rośniesz." })).toBeVisible()
 
   await page.getByRole("radio", { name: "Motyw ciemny" }).click()
   await page.reload()

@@ -88,6 +88,14 @@ Kod uruchamia się lokalnie na Twoim komputerze. Po rozwiązaniu oceniasz, jak �
 
 Kliknięcie tytułu w bibliotece otwiera sesję z jednym zadaniem. Notatki zapisują się same sekundę po pisaniu.
 
+## Pulpit i Statystyki
+
+- **Pulpit** pokazuje plan na dziś (zadania do powtórki + nowe), a gdy wszystko zrobione — termin kolejnych powtórek.
+- **Seria dni** — ile dni z rzędu była co najmniej jedna ocena, licząc od dziś (a gdy dziś jeszcze nic — od wczoraj).
+- **Skuteczność** — udane powtórki (Trudne, Dobre, Łatwe) / wszystkie oceny w okresie. „Znowu” to ponowna nauka.
+- **Utrwalone** — zadania z odstępem co najmniej 21 dni.
+- **Statystyki** domyślnie za ostatnie 14 dni; okres zmienisz listą albo adresem `/statystyki?dni=7|14|30|90`.
+
 ## Dane
 
 Wszystko jest w jednym pliku **`leetrepeat.db`** obok `main.py` (kopia zapasowa = skopiuj ten plik).

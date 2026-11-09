@@ -1,4 +1,4 @@
-import { formatDuration, inDays, longDate, relativeDay, todayIso } from "@/lib/dates"
+import { daysAgo, formatDuration, inDays, longDate, relativeDay, shortDate, todayIso } from "@/lib/dates"
 
 afterEach(() => vi.useRealTimers())
 
@@ -26,4 +26,13 @@ it("inDays", () => {
 it("formatDuration", () => {
   expect(formatDuration(272)).toBe("04:32")
   expect(formatDuration(3872)).toBe("1:04:32")
+})
+
+it("shortDate i daysAgo", () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 10, 9, 12, 0))
+  expect(shortDate("2026-10-27")).toBe("27 paź")
+  expect(shortDate("2026-11-09", true)).toBe("9 lis 2026")
+  expect(daysAgo(13)).toBe("2026-10-27")
+  expect(daysAgo(0)).toBe("2026-11-09")
 })
