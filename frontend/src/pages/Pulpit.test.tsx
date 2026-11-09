@@ -48,7 +48,7 @@ it("plan na dziś", async () => {
 it("wszystko zrobione", async () => {
   show({ completed_today: 6, due_count: 0, new_count: 0, session_count: 0, queue: [Q(5, "Valid Anagram", "python", "2026-11-10")], queue_rest: [] })
   expect(await screen.findByText("Wszystko zrobione na dziś")).toBeInTheDocument()
-  expect(screen.getByText("6 z 6 powtórek ukończonych")).toBeInTheDocument()
+  expect(screen.getByText("Ukończone powtórki: 6 z 6")).toBeInTheDocument()
   expect(screen.getByText("Kolejne powtórki: jutro, 10 listopada")).toBeInTheDocument()
   expect(screen.getByText("Następne w kolejce")).toBeInTheDocument()
   expect(screen.getByText("Dziś możesz już odpocząć. Postęp został zapisany.")).toBeInTheDocument()
@@ -88,4 +88,22 @@ it("nagłówek z datą", async () => {
   show()
   expect(await screen.findByRole("heading", { level: 1, name: "Dobry dzień na trochę kodu." })).toBeInTheDocument()
   expect(screen.getByText("Poniedziałek, 9 listopada 2026 · Twoja codzienna praktyka")).toBeInTheDocument()
+})
+
+it("odmiana liczebników na Pulpicie", async () => {                   // przegląd końcowy: „1 utrwalonych”, „5 nowe”
+  show({
+    progress_by_language: [
+      { language: "python", consolidated: 1, learning: 0, new: 5 },
+      { language: "csharp", consolidated: 5, learning: 2, new: 1 },
+    ],
+  })
+  expect(await screen.findByText("1 utrwalone · 0 w nauce · 5 nowych")).toBeInTheDocument()
+  expect(screen.getByText("6 zadań · 1 utrwalone")).toBeInTheDocument()
+  expect(screen.getByText("5 utrwalonych · 2 w nauce · 1 nowe")).toBeInTheDocument()
+})
+
+it("odmiana w stanie „wszystko zrobione”", async () => {
+  show({ completed_today: 1, due_count: 0, new_count: 0, session_count: 0, queue: [], queue_rest: [] })
+  expect(await screen.findByText("1 ukończone")).toBeInTheDocument()
+  expect(screen.getByText("Ukończone powtórki: 1 z 1")).toBeInTheDocument()
 })

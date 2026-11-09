@@ -48,10 +48,12 @@ def dashboard(con: sqlite3.Connection, today: date, language: str | None = None)
             new_count += 1
             progress[lang]["new"] += 1
             continue
+        # Utrwalone wymaga terminu w przyszłości (spec §4) — zadanie „Do powtórki” liczymy jako „w nauce”,
+        # tak jak filtr statusów w bibliotece
         if row["due_date"] <= today_iso:
             due_by_language[lang] += 1
-        # Postęp liczony po odstępie, niezależnie od terminu (zadania „Do powtórki” są „w nauce”)
-        if row["interval_days"] >= CONSOLIDATED_DAYS:
+            progress[lang]["learning"] += 1
+        elif row["interval_days"] >= CONSOLIDATED_DAYS:
             progress[lang]["consolidated"] += 1
         else:
             progress[lang]["learning"] += 1

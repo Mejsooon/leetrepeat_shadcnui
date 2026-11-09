@@ -15,7 +15,7 @@
 - Wszystko z Etapów 1–3: `127.0.0.1:8000`, offline, `frontend/dist` commitowany (`npm run build` przed commitem zmian frontendu), polskie teksty i komentarze, prosty liniowy kod, daty we frontendzie w czasie lokalnym (`lib/dates.ts`).
 - Udana powtórka = ocena ≠ `again`. Skuteczność = udane / wszystkie oceny w okresie. Seria dni = liczba kolejnych dni z ≥ 1 oceną, licząc wstecz od dziś (gdy dziś brak ocen — od wczoraj). Najdłuższa seria = najdłuższy taki ciąg w całej historii.
 - Dzień oceny = `reviewed_at[:10]` (zapisywane w czasie lokalnym serwera).
-- Utrwalone / w nauce w „Postępie według języka” liczone po odstępie, niezależnie od terminu: utrwalone = ma oceny i `interval_days ≥ 21`, w nauce = ma oceny i `interval_days < 21` (w tym „Do powtórki”), nowe = brak ocen. Podpis pod kartą: „Utrwalone = odstęp co najmniej 21 dni.” (spec wygrywa z tekstem z designu o „3 udanych powtórkach”).
+- Utrwalone / w nauce w „Postępie według języka”: utrwalone = ma oceny, `due_date > dziś` i `interval_days ≥ 21` (spec §4), w nauce = pozostałe zadania z ocenami (w tym „Do powtórki”), nowe = brak ocen. (Poprawione po przeglądzie końcowym.) Podpis pod kartą: „Utrwalone = odstęp co najmniej 21 dni.” (spec wygrywa z tekstem z designu o „3 udanych powtórkach”).
 - Statystyki domyślnie: ostatnie 14 dni (`to` = dziś, `from` = dziś − 13), zakres włącznie z oboma końcami.
 - Wykres: słupki Python / C# (`--chart-1` / `--chart-2` jak w designie: niebieski / fioletowy), shadcn `chart`.
 

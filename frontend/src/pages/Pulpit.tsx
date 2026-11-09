@@ -69,7 +69,7 @@ export default function Pulpit() {
               title="Do powtórki dziś"
               value={data.due_count}
               hint={variant === "done"
-                ? `${data.completed_today} z ${data.completed_today + data.due_count} powtórek ukończonych`
+                ? `Ukończone powtórki: ${data.completed_today} z ${data.completed_today + data.due_count}`
                 : `${data.due_by_language.python} Python · ${data.due_by_language.csharp} C#`}
             />
             <StatCard title="Nowe zadania" value={data.new_count} hint="Czekają na pierwsze podejście" />
@@ -102,7 +102,7 @@ export default function Pulpit() {
                     <h2 className="text-2xl font-semibold tracking-tight">Wszystko zrobione na dziś</h2>
                     <p className="text-sm text-muted-foreground">Dobra robota — wszystkie zaplanowane powtórki są za Tobą.</p>
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <Badge variant="secondary">{data.completed_today} ukończonych</Badge>
+                      <Badge variant="secondary">{plural(data.completed_today, "ukończone", "ukończone", "ukończonych")}</Badge>
                       {nextText && <span className="text-muted-foreground">{nextText}</span>}
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -226,7 +226,7 @@ function ProgressRow({ progress }: { progress: LanguageProgress }) {
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-medium">{LANGUAGE_LABEL[progress.language]}</span>
         <span className="text-xs text-muted-foreground">
-          {plural(total, "zadanie", "zadania", "zadań")} · {progress.consolidated} utrwalonych
+          {plural(total, "zadanie", "zadania", "zadań")} · {plural(progress.consolidated, "utrwalone", "utrwalone", "utrwalonych")}
         </span>
       </div>
       <div className="flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
@@ -235,7 +235,8 @@ function ProgressRow({ progress }: { progress: LanguageProgress }) {
         <span className="bg-primary/20" style={{ width: width(progress.new) }} />
       </div>
       <span className="text-xs text-muted-foreground">
-        {progress.consolidated} utrwalonych · {progress.learning} w nauce · {progress.new} nowe
+        {plural(progress.consolidated, "utrwalone", "utrwalone", "utrwalonych")} · {progress.learning} w nauce ·{" "}
+        {plural(progress.new, "nowe", "nowe", "nowych")}
       </span>
     </div>
   )

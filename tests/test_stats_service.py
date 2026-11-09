@@ -184,3 +184,10 @@ def test_recent_days(db):
     recent = stats(db, START, TODAY, TODAY)["recent_days"]
     assert [d["date"] for d in recent] == ["2026-11-09", "2026-11-08", "2026-11-07", "2026-11-06"]
     assert recent[0] == {"date": "2026-11-09", "count": 2, "success_rate": 0.5}
+
+
+def test_progress_due_consolidated_counts_as_learning(db):   # przegląd końcowy: spec §4 — Utrwalone wymaga due_date > dziś
+    task_id = add(db, "Długi odstęp, termin dziś", interval=30, due="2026-11-09")
+    review(db, task_id)
+    progress = dashboard(db, TODAY)["progress_by_language"][0]
+    assert progress == {"language": "python", "consolidated": 0, "learning": 1, "new": 0}
