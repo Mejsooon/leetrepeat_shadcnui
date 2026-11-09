@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from "react-router"
 import { AppSidebar } from "@/components/AppSidebar"
+import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { SiteHeader } from "@/components/SiteHeader"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
@@ -23,6 +24,7 @@ export function AppLayout() {
       <SidebarInset>
         <SiteHeader crumbs={crumbsFor(pathname)} />
         <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">
+          <ConnectionBanner />
           <Outlet />
         </main>
       </SidebarInset>
