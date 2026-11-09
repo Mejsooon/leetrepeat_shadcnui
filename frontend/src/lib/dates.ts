@@ -65,3 +65,8 @@ export function daysAgo(days: number): string {
   const now = new Date()
   return toIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - days))
 }
+
+// Podpis dnia na osi wykresu: przy długim okresie z miesiącem („9 lis”), inaczej sam dzień („9”)
+export function chartDayLabel(iso: string, longPeriod: boolean): string {
+  return longPeriod ? shortDate(iso) : String(parseLocalDate(iso).getDate())
+}

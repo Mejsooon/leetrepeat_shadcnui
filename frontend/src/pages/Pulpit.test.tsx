@@ -107,3 +107,10 @@ it("odmiana w stanie „wszystko zrobione”", async () => {
   expect(await screen.findByText("1 ukończone")).toBeInTheDocument()
   expect(screen.getByText("Ukończone powtórki: 1 z 1")).toBeInTheDocument()
 })
+
+it("zrobione, ale są nowe → Dziś w kolejce", async () => {            // Etap 6
+  show({ completed_today: 2, due_count: 0, new_count: 3, session_count: 3, queue_rest: [] })
+  expect(await screen.findByText("Wszystko zrobione na dziś")).toBeInTheDocument()
+  expect(screen.getByText("Dziś w kolejce")).toBeInTheDocument()
+  expect(screen.queryByText("Następne w kolejce")).not.toBeInTheDocument()
+})

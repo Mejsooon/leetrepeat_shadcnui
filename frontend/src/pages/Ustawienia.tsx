@@ -112,8 +112,23 @@ export default function Ustawienia() {
     setForm((f) => (f ? { ...f, [key]: value } : f))
   }
 
-  function refreshDatabaseInfo() {
-    getSettings().then((s) => setSettings((old) => (old ? { ...old, database: s.database } : s))).catch(() => {})
+  // Po „Pobierz kopię”: co 1 s (najwyżej 10 razy) sprawdzamy, czy serwer zapisał nową „ostatnią kopię”
+  // — duża baza kopiuje się dłużej niż sekundę
+  function watchBackupTime() {
+    const before = settings?.database.last_backup_at ?? null
+    let attempts = 0
+    const tick = () => {
+      attempts += 1
+      getSettings()
+        .then((s) => {
+          setSettings((old) => (old ? { ...old, database: s.database } : s))
+          if (s.database.last_backup_at === before && attempts < 10) setTimeout(tick, 1000)
+        })
+        .catch(() => {
+          if (attempts < 10) setTimeout(tick, 1000)
+        })
+    }
+    setTimeout(tick, 1000)
   }
 
   async function confirmRestore() {
@@ -224,7 +239,7 @@ export default function Ustawienia() {
                 <span className="font-medium">Eksportuj bazę</span>
                 <p className="text-xs text-muted-foreground">Pobierz kopię pliku, np. <code>leetrepeat-{todayIso()}.db</code>.</p>
                 <Button variant="outline" className="self-start" asChild>
-                  <a href={BACKUP_URL} download onClick={() => setTimeout(refreshDatabaseInfo, 1000)}>
+                  <a href={BACKUP_URL} download onClick={watchBackupTime}>
                     <Download /> Pobierz kopię
                   </a>
                 </Button>

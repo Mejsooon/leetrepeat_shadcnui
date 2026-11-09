@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react"
+import { act, screen, waitFor } from "@testing-library/react"
 import type { Stats } from "@/api"
 import { renderApp, stubApi } from "@/test/renderApp"
 
@@ -94,4 +94,23 @@ it("słabe zadania i ostatnie dni", async () => {
 it("pusta lista słabych zadań", async () => {
   show("/statystyki", { weak_tasks: [] })
   expect(await screen.findByText("Brak zadań z niską skutecznością.")).toBeInTheDocument()
+})
+
+it("stara odpowiedź nie nadpisuje nowego okresu", async () => {       // Etap 6
+  let releaseOld: () => void = () => {}
+  const json = (body: unknown) => new Response(JSON.stringify(body))
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url.startsWith("/api/stats?from=2026-10-27")) {
+      return new Promise<Response>((resolve) => { releaseOld = () => resolve(json({ ...STATS, reviews_count: 9 })) })
+    }
+    if (url.startsWith("/api/stats")) return json({ ...STATS, reviews_count: 5 })
+    return json({ status: "ok", version: "3.0.0" })
+  }))
+  const { router } = renderApp("/statystyki")
+  await act(() => router.navigate("/statystyki?dni=30"))
+  expect(await screen.findByText("5")).toBeInTheDocument()
+  await act(async () => { releaseOld() })
+  await new Promise((r) => setTimeout(r, 20))
+  expect(screen.getByText("5")).toBeInTheDocument()
+  expect(screen.queryByText("9")).not.toBeInTheDocument()
 })

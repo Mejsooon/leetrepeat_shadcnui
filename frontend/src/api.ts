@@ -214,8 +214,16 @@ export type Stats = {
   recent_days: RecentDay[]
 }
 
+// Panel boczny i Pulpit pytają o to samo w tej samej chwili — równoczesne wywołania dzielą jedno żądanie
+let dashboardInFlight: Promise<Dashboard> | null = null
+
 export function getDashboard(): Promise<Dashboard> {
-  return request<Dashboard>("/dashboard")
+  if (!dashboardInFlight) {
+    dashboardInFlight = request<Dashboard>("/dashboard").finally(() => {
+      dashboardInFlight = null
+    })
+  }
+  return dashboardInFlight
 }
 
 export function getStats(from: string, to: string): Promise<Stats> {
