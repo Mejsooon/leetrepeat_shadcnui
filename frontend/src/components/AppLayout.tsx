@@ -1,7 +1,7 @@
 import { CircleCheck } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 import { Outlet, useLocation } from "react-router"
-import { listTasks } from "@/api"
+import { getDashboard } from "@/api"
 import { AppSidebar } from "@/components/AppSidebar"
 import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { SiteHeader } from "@/components/SiteHeader"
@@ -30,19 +30,27 @@ const SAVED_LOCALLY = (
 export function AppLayout() {
   const { pathname } = useLocation()
   const [taskCount, setTaskCount] = useState<number | undefined>(undefined)
+  const [streak, setStreak] = useState<number | undefined>(undefined)
   const [status, setStatus] = useState<ReactNode | null>(null)
 
-  // Licznik przy „Zadania” — odświeżany po każdej zmianie ekranu (np. po dodaniu albo usunięciu zadania)
+  // Licznik przy „Zadania” i seria dni — odświeżane po każdej zmianie ekranu
+  // (np. po dodaniu zadania albo po zakończonej sesji)
   useEffect(() => {
-    listTasks({ page: 1 })
-      .then((list) => setTaskCount(list.counts.library))
-      .catch(() => setTaskCount(undefined))
+    getDashboard()
+      .then((d) => {
+        setTaskCount(d.library_count)
+        setStreak(d.streak)
+      })
+      .catch(() => {
+        setTaskCount(undefined)
+        setStreak(undefined)
+      })
   }, [pathname])
 
   return (
     <HeaderStatusContext.Provider value={setStatus}>
       <SidebarProvider>
-        <AppSidebar taskCount={taskCount} />
+        <AppSidebar taskCount={taskCount} streak={streak} />
         <SidebarInset>
           <SiteHeader crumbs={crumbsFor(pathname)} status={status ?? SAVED_LOCALLY} />
           <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">

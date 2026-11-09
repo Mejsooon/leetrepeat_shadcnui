@@ -25,7 +25,7 @@ it.each([
 })
 
 it("panel pokazuje liczbę zadań z API", async () => {
-  stubApi({ "/api/tasks": { ...EMPTY_LIST, counts: { library: 24, due: 0, new: 0 } } })
+  stubApi({ "/api/dashboard": { library_count: 24, streak: 0 } })
   renderApp("/")
   expect(await screen.findByText("24")).toBeInTheDocument()
 })

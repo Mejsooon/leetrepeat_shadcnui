@@ -25,9 +25,10 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import { useTheme, type Theme } from "@/theme"
+import { plural } from "@/lib/plural"
 
 // Panel boczny 1:1 z artboardu AppSidebar.dc.html.
-// taskCount i streak przyjdą z API w Etapach 2 i 4 — bez nich licznik i karta serii się nie pokazują.
+// taskCount i streak z /api/dashboard — bez nich (albo przy serii 0) licznik i karta serii się nie pokazują.
 export function AppSidebar({ taskCount, streak }: { taskCount?: number; streak?: number }) {
   const { pathname } = useLocation()
   const { theme, setTheme } = useTheme()
@@ -98,13 +99,13 @@ export function AppSidebar({ taskCount, streak }: { taskCount?: number; streak?:
       </SidebarContent>
 
       <SidebarFooter>
-        {streak !== undefined && (
+        {streak !== undefined && streak > 0 && (
           <div className="flex flex-col gap-1 rounded-lg border bg-card p-3 shadow-xs">
             <span className="flex items-center justify-between text-sm font-medium">
               Małe kroki, codziennie
               <Flame className="size-4 text-warning" aria-hidden="true" />
             </span>
-            <span className="text-xs text-muted-foreground">Twoja seria trwa już {streak} dni.</span>
+            <span className="text-xs text-muted-foreground">Twoja seria trwa już {plural(streak, "dzień", "dni", "dni")}.</span>
           </div>
         )}
         <div className="flex gap-2 px-2 pt-1 text-xs text-muted-foreground">
