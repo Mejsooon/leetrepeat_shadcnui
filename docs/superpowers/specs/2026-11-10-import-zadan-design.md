@@ -1,7 +1,8 @@
 # Import zadań z JSON (np. wygenerowanych przez AI)
 
 Data: 2026-11-10
-Status: do przeglądu przez użytkownika
+Status: zatwierdzony przez użytkownika (2026-11-10)
+Design: artefakt „LeetRepeat – shadcn/ui” (https://claude.ai/artifact/1VrdsLiDCNaxMDw8qk4UhY) — rząd „Import zadań z JSON (np. od AI)”: `Import-wklejanie`, `Import-podglad`, `Import-wynik` + przycisk „Importuj” na `Zadania` i `Zadania-puste`. Przenieść 1:1 na komponenty shadcn/ui.
 Dotyczy: spec v3 (`2026-11-08-leetrepeat-v3-design.md`) — ten dokument go rozszerza; w razie sprzeczności w temacie importu ma pierwszeństwo.
 
 ## 1. Cel
@@ -27,6 +28,7 @@ Użytkownik prosi AI (np. w czacie) o zestaw zadań, dostaje JSON i wgrywa go do
 | Sprawdzanie rozwiązań | automatycznie w podglądzie przez istniejące `/api/run` |
 | Architektura | backend waliduje i importuje, frontend uruchamia rozwiązania po kolei (podejście 1) |
 | Nieznane pola | ignorowane po cichu |
+| Szczegóły z designu (2026-11-10) | status „czeka na sprawdzenie”, pasek postępu z podsumowaniem, lista zaimportowanych tytułów, druga linijka w alercie błędu importu |
 
 ## 2. Format pliku
 
@@ -88,7 +90,7 @@ Stała tekstowa w `frontend/src/lib/importPrompt.ts`, po polsku, kopiowana do sc
 
 Element wyniku: `{index, title, language, status, message, task}` (`title`/`language` = to, co było w pliku, albo `null`; `task` tylko dla `new`).
 
-**`import_tasks(con, tasks, now) -> dict`** — w jednej transakcji: dla każdego zadania ponownie `repo.task_exists` (duplikat → `skipped += 1`), inaczej istniejące `create_task`. Wyjątek → `con.rollback()` i ponowne zgłoszenie. Na końcu `con.commit()`. Zwraca `{imported, skipped}`.
+**`import_tasks(con, tasks, now) -> dict`** — w jednej transakcji: dla każdego zadania ponownie `repo.task_exists` (duplikat → `skipped += 1`), inaczej istniejące `create_task`. Wyjątek → `con.rollback()` i ponowne zgłoszenie. Na końcu `con.commit()`. Zwraca `{imported, skipped, added}` — `added` = `[{title, language}]` faktycznie dodanych zadań, w kolejności (lista na ekranie wyniku).
 
 ### `backend/repository/tasks.py`
 
@@ -99,7 +101,7 @@ Nowa funkcja `task_exists(con, title, language) -> bool` (`SELECT 1 FROM tasks W
 | Metoda | Ścieżka | Wejście | Odpowiedź |
 |---|---|---|---|
 | POST | `/api/import/preview` | `ImportPreviewIn {text: str}` | 200 `{items: [...]}`; 413 „Tekst jest za duży (najwyżej 1 MB)”, gdy `text` > 1 MB (liczone w bajtach UTF-8); 422 z komunikatem `ImportFormatError` |
-| POST | `/api/import` | `ImportIn {tasks: list[TaskIn]}` (1–100 elementów) | 201 `{imported, skipped}`; 422 walidacja |
+| POST | `/api/import` | `ImportIn {tasks: list[TaskIn]}` (1–100 elementów) | 201 `{imported, skipped, added}`; 422 walidacja |
 
 - Oba przechodzą przez `block_cross_site` (POST pod `/api/`).
 - Sprawdzanie rozwiązań nie ma własnego endpointu — frontend używa `POST /api/run` z `code = solution`.
@@ -118,19 +120,23 @@ Czyta plik jako tekst → `preview_import` → wypisuje „Pominięto „…”:
 
 ### Krok 1 — wklejanie
 
-- „Skopiuj instrukcję dla AI” → schowek; etykieta „Skopiowano ✓” przez 2 s.
+- „Skopiuj instrukcję dla AI” (ikona schowka) → schowek; przez 2 s etykieta „Skopiowano” z zieloną ikoną ✓ zamiast ikony schowka.
 - „Wybierz plik…” (`accept=".json,application/json"`): plik > 1 MB → błąd bez odczytu; inaczej treść do pola i od razu podgląd.
 - Wklejenie do pustego pola od razu uruchamia podgląd; przy ręcznym pisaniu — przycisk „Sprawdź” (nieaktywny przy pustym polu).
 - Pod polem stała linijka: „Sprawdzanie uruchomi rozwiązania na Twoim komputerze — importuj tylko zadania z zaufanego źródła.”
-- Błąd 413/422 — komunikat pod polem; tekst zostaje do poprawy.
+- Błąd 413/422 — komunikat pod polem (czerwona ramka pola, ikona, `role="alert"`); tekst zostaje do poprawy.
+- Stopka: „Anuluj” (outline) i „Sprawdź” (primary).
 
 ### Krok 2 — podgląd
 
-Wiersz: checkbox, tytuł (albo „(bez tytułu) #N”), język, status z komunikatem.
+Opis pod tytułem okna: „Znaleziono N zadań. Zaznacz te, które chcesz dodać do biblioteki.” (odmiana przez `plural`).
+
+Tabela: checkbox, „Zadanie” (tytuł albo „(bez tytułu) #N” + pod spodem szara linijka „Funkcja · 5 testów · Listy, Pętle” / „Program · 3 testy”; dla `invalid` — „Pozycja N w pliku”), „Język” (plakietka; `invalid` bez języka → „—”), „Sprawdzenie” (plakietka z ikoną). Wiersze `duplicate` / `invalid` mają szare tło i wyszarzony tytuł.
 
 | Status | Tekst | Checkbox |
 |---|---|---|
-| sprawdzanie | „sprawdzam…” | zaznaczony |
+| w kolejce (jeszcze nie sprawdzane) | „czeka na sprawdzenie” (szara, ikona zegara) | zaznaczony |
+| sprawdzanie (to jedno, które właśnie trwa) | „sprawdzam…” (niebieska, kręcąca się ikona) | zaznaczony |
 | przechodzi | „Rozwiązanie przechodzi testy” | zaznaczony |
 | nie przechodzi | „Nie przechodzi X z Y testów” (`fail`/`error`/`timeout` = nie przechodzi) | **odznaczony**, można zaznaczyć |
 | 503 z `/api/run` | „Nie sprawdzono (brak Pythona)” / „(brak .NET)” | zaznaczony |
@@ -138,14 +144,16 @@ Wiersz: checkbox, tytuł (albo „(bez tytułu) #N”), język, status z komunik
 | `duplicate` | komunikat z backendu | wyłączony, odznaczony |
 | `invalid` | komunikat z backendu | wyłączony, odznaczony |
 
-- Rozwiązania są uruchamiane po kolei (jedno `/api/run` naraz), w kolejności z pliku; nad listą „Sprawdzam rozwiązania: N z M…”.
+- Rozwiązania są uruchamiane po kolei (jedno `/api/run` naraz), w kolejności z pliku.
+- Nad listą: po lewej „Sprawdzam rozwiązania: N z M…” z kręcącą się ikoną (M = liczba zadań `new`, N = numer sprawdzanego), po zakończeniu „Sprawdzono M rozwiązań”; po prawej podsumowanie z niezerowych grup, np. „2 gotowe · 1 nie przechodzi · 2 bez sprawdzenia” („bez sprawdzenia” = 503 i inne błędy `/api/run`). Pod spodem pasek postępu (`role="progressbar"`, wypełnienie = sprawdzone / M).
+- Stopka: po lewej „Zadania z błędem i duplikaty nie zostaną dodane.”, po prawej „Wstecz” (outline) i „Importuj N zadań” (primary, ikona pobierania).
 - „Importuj N zadań” (odmiana przez `lib/plural.ts`) — nieaktywny w trakcie sprawdzania i gdy N = 0.
 - „Wstecz” wraca do kroku 1 z tym samym tekstem. Zamknięcie okna albo „Wstecz” przerywa dalsze sprawdzanie (wyniki spóźnionych odpowiedzi są ignorowane).
 
 ### Krok 3 — wynik
 
-- Sukces: alert „Zaimportowano N zadań” (+ „, pominięto M — już istnieją”, gdy M > 0) i „Zamknij”; lista w tle odświeża się.
-- Błąd importu (500 / brak połączenia): alert „Nie zaimportowano żadnego zadania — spróbuj ponownie”; podgląd i zaznaczenia zostają.
+- Sukces: alert z zieloną ikoną — „Zaimportowano N zadań” (+ „, pominięto M — już istnieją”, gdy M > 0) i druga linijka „Nowe zadania są w bibliotece ze statusem „Nowe” i trafią do najbliższej sesji.”; pod nim lista zaimportowanych tytułów z plakietką języka (z pola `added` odpowiedzi, patrz §4); przycisk „Zamknij”. Lista w tle odświeża się.
+- Błąd importu (500 / brak połączenia): alert nad stopką — „Nie zaimportowano żadnego zadania — spróbuj ponownie” i druga linijka „Zaznaczenia zostały zachowane. Sprawdź, czy aplikacja nadal działa.”; podgląd i zaznaczenia zostają.
 
 ## 6. Obsługa błędów — zestawienie
 

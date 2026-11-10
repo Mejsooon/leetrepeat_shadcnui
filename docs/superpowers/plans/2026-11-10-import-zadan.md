@@ -112,14 +112,14 @@ git commit -m "Import: podgląd zadań z JSON (preview_import, task_exists)"
 
 **Interfejsy:**
 - Używa: `preview_import`, `repo.task_exists`, `create_task(con, data, now) -> int`.
-- Daje: `import_tasks(con: sqlite3.Connection, tasks: list[dict], now: datetime) -> dict` → `{"imported": int, "skipped": int}`; `tasks` = słowniki w kształcie `TaskIn.model_dump()`. Sygnatura `import_seed(json_path, con, now) -> tuple[int, int]` bez zmian.
+- Daje: `import_tasks(con: sqlite3.Connection, tasks: list[dict], now: datetime) -> dict` → `{"imported": int, "skipped": int, "added": [{"title": str, "language": str}]}` (`added` w kolejności zapisu); `tasks` = słowniki w kształcie `TaskIn.model_dump()`. Sygnatura `import_seed(json_path, con, now) -> tuple[int, int]` bez zmian.
 
 - [ ] **Krok 1: Testy, które padają** (w `tests/test_importer.py`)
 
 | Test | Asercja |
 |---|---|
-| `test_import_tasks_saves_tests_and_tags` | `import_tasks(db, [task z tags=["Listy"] i 2 testami], NOW) == {"imported": 1, "skipped": 0}`; `get_task(db, id, TODAY)` ma 2 testy i `tags == ["Listy"]`, status zadania `new` |
-| `test_import_tasks_skips_duplicate_added_after_preview` | podgląd → `create_task` tego samego → `import_tasks` z `task` z podglądu → `{"imported": 0, "skipped": 1}` |
+| `test_import_tasks_saves_tests_and_tags` | `import_tasks(db, [task z tags=["Listy"] i 2 testami], NOW) == {"imported": 1, "skipped": 0, "added": [{"title": task["title"], "language": "python"}]}`; `get_task(db, id, TODAY)` ma 2 testy i `tags == ["Listy"]`, status zadania `new` |
+| `test_import_tasks_skips_duplicate_added_after_preview` | podgląd → `create_task` tego samego → `import_tasks` z `task` z podglądu → `{"imported": 0, "skipped": 1, "added": []}` |
 | `test_import_tasks_rollback` | `monkeypatch` `backend.services.importer.create_task` tak, by drugie wywołanie rzucało `RuntimeError`; `pytest.raises(RuntimeError)`; potem `SELECT COUNT(*) FROM tasks` == 0 |
 
 - [ ] **Krok 2: Uruchom — padają** (`ImportError: import_tasks`).
@@ -153,7 +153,7 @@ git commit -m "Import: zapis w jednej transakcji; import_seed na wspólnym serwi
 - Używa: `preview_import`, `import_tasks`, `ImportFormatError`, `TaskIn`.
 - Daje (HTTP):
   - `POST /api/import/preview` body `ImportPreviewIn {text: str}` → 200 `{"items": [...]}` | 413 `{"detail": "Tekst jest za duży (najwyżej 1 MB)"}` | 422 `{"detail": "<komunikat ImportFormatError>"}`
-  - `POST /api/import` body `ImportIn {tasks: list[TaskIn]}` (`Field(min_length=1, max_length=100)`) → 201 `{"imported", "skipped"}` | 422
+  - `POST /api/import` body `ImportIn {tasks: list[TaskIn]}` (`Field(min_length=1, max_length=100)`) → 201 `{"imported", "skipped", "added"}` | 422
 
 - [ ] **Krok 1: Testy, które padają** (fixture `client` z `conftest.py`)
 
@@ -162,7 +162,7 @@ git commit -m "Import: zapis w jednej transakcji; import_seed na wspólnym serwi
 | `test_preview_ok` | 200, `items[0]["status"] == "new"` |
 | `test_preview_bad_json` | 422, `detail` zaczyna się od `"Nieprawidłowy JSON"` |
 | `test_preview_too_large_bytes` | `text = "ą" * 600_000` → 413, `detail == "Tekst jest za duży (najwyżej 1 MB)"` (Review Focus 3) |
-| `test_import_creates` | `POST /api/import` z `task` z podglądu → 201 `{"imported": 1, "skipped": 0}`; `GET /api/tasks` → `total == 1` |
+| `test_import_creates` | `POST /api/import` z `task` z podglądu → 201 `{"imported": 1, "skipped": 0, "added": [{"title": …, "language": "python"}]}`; `GET /api/tasks` → `total == 1` |
 | `test_import_validates` | `{"tasks": []}` → 422; zadanie bez `solution` → 422 |
 | `test_import_blocked_cross_site` | nagłówek `Origin: https://zla-strona.pl` → 403 dla obu endpointów |
 
@@ -193,7 +193,8 @@ git commit -m "API: /import/preview i /import"
   - `type ImportStatus = "new" | "duplicate" | "invalid"`
   - `type ImportPreviewItem = { index: number; title: string | null; language: Language | null; status: ImportStatus; message: string; task: TaskInput | null }`
   - `previewImport(text: string): Promise<{ items: ImportPreviewItem[] }>` → `POST /import/preview`
-  - `importTasks(tasks: TaskInput[]): Promise<{ imported: number; skipped: number }>` → `POST /import`
+  - `type ImportResult = { imported: number; skipped: number; added: { title: string; language: Language }[] }`
+  - `importTasks(tasks: TaskInput[]): Promise<ImportResult>` → `POST /import`
   - `export const IMPORT_PROMPT: string` w `lib/importPrompt.ts`
 
 - [ ] **Krok 1: Testy, które padają**
@@ -233,39 +234,41 @@ git commit -m "Frontend: API importu i instrukcja dla AI"
 ### Zadanie 5: `ImportDialog` — krok 1 (wklejanie, plik, podgląd)
 
 **Pliki:**
-- Utwórz: `frontend/src/components/ImportDialog.tsx`, `frontend/src/components/ui/checkbox.tsx` (shadcn)
+- Utwórz: `frontend/src/components/ImportDialog.tsx`, `frontend/src/components/ui/checkbox.tsx` i `frontend/src/components/ui/progress.tsx` (shadcn)
 - Test: `frontend/src/components/ImportDialog.test.tsx`
 
 **Interfejsy:**
 - Używa: `previewImport`, `IMPORT_PROMPT`, `ApiError`, komponenty `Dialog`, `Textarea`, `Button`, `Alert`, `Checkbox`.
 - Daje: `export default function ImportDialog({ onImported }: { onImported: () => void })` — renderuje własny przycisk-wyzwalacz „Importuj” (`variant="outline"`, ikona `Upload`) i okno. Tytuł okna: „Importuj zadania”.
 
-Etykiety (dokładne): pole `aria-label="JSON z zadaniami"`; przyciski „Skopiuj instrukcję dla AI” / „Skopiowano ✓”, „Wybierz plik…”, „Sprawdź”, „Anuluj”, „Wstecz”; linijka ostrzeżenia ze specu §5 dosłownie.
+Wygląd i teksty: artboardy `Import-wklejanie` i `Import-podglad` w artefakcie designu (link w specu) — przenieść 1:1 na shadcn (`Dialog`, `Button`, `Textarea`, `Checkbox`, `Badge`, `Table`, `Alert`, `Progress`). Etykiety (dokładne): `<label>` „JSON z zadaniami” dla pola; przyciski „Skopiuj instrukcję dla AI” / „Skopiowano” (z ikoną ✓), „Wybierz plik…”, „Sprawdź”, „Anuluj”, „Wstecz”; linijka ostrzeżenia ze specu §5 dosłownie; opis podglądu „Znaleziono N zadań. Zaznacz te, które chcesz dodać do biblioteki.”.
 
 - [ ] **Krok 1: Testy, które padają** (`render(<ImportDialog onImported={vi.fn()} />)`, fetch przez `stubApi`; podgląd z 3 elementami `new` / `duplicate` / `invalid`)
 
 | Test | Asercja |
 |---|---|
-| `kopiuje instrukcję` | `navigator.clipboard.writeText` (atrapa) wywołane z `IMPORT_PROMPT`; widać „Skopiowano ✓”; po 2 s (fake timers) znów „Skopiuj instrukcję dla AI” |
+| `kopiuje instrukcję` | `navigator.clipboard.writeText` (atrapa) wywołane z `IMPORT_PROMPT`; widać „Skopiowano”; po 2 s (fake timers) znów „Skopiuj instrukcję dla AI” |
 | `wklejenie do pustego pola uruchamia podgląd` | `userEvent.paste` → jedno żądanie `/api/import/preview`; widać 3 wiersze z tytułami |
 | `Ctrl+A i wklejenie też uruchamia podgląd` | pole z tekstem „abc”, zaznacz wszystko, `paste` → żądanie z wklejonym tekstem (Review Focus 4) |
 | `pisanie nie uruchamia podglądu; Sprawdź tak` | `type` → 0 żądań; „Sprawdź” → 1; „Sprawdź” nieaktywne przy pustym polu |
 | `plik trafia do pola i uruchamia podgląd` | `userEvent.upload` pliku `.json` → pole zawiera treść, 1 żądanie |
 | `za duży plik` | `File` z `size` > 1 048 576 → „Plik jest za duży (najwyżej 1 MB)”, 0 żądań |
 | `błąd 422 pod polem` | odpowiedź 422 `{"detail": "Nieprawidłowy JSON w linii 1, kolumnie 2"}` → ten tekst widoczny, pole zachowuje treść |
-| `statusy duplikatu i błędu` | wiersze `duplicate` / `invalid`: komunikat z backendu, checkbox `disabled` i niezaznaczony |
+| `statusy duplikatu i błędu` | wiersze `duplicate` / `invalid`: komunikat z backendu, checkbox `disabled` i niezaznaczony; `invalid` bez tytułu → „(bez tytułu) #7” i „Pozycja 7 w pliku”, język „—” |
+| `opis wiersza` | zadanie `function` z 5 testami i tagami `["Listy","Pętle"]` → „Funkcja · 5 testów · Listy, Pętle”; `program` z 1 testem bez tagów → „Program · 1 test” |
+| `opis okna` | „Znaleziono 3 zadania. Zaznacz te, które chcesz dodać do biblioteki.” |
 | `Wstecz wraca z tym samym tekstem` | po podglądzie „Wstecz” → pole z poprzednim tekstem |
 
 - [ ] **Krok 2: Uruchom — padają.**
 
-- [ ] **Krok 3: Zaimplementuj** — stan: `step: "paste" | "preview" | "done"`, `text`, `error`, `items`. Wykrywanie wklejenia (Review Focus 4): w `onPaste` zapamiętaj `pasted = event.clipboardData.getData("text")`; w `onChange` uruchom podgląd, gdy `event.target.value === pasted`. Plik: `file.size` przed `file.text()`; wyjątek `file.text()` → „Nie udało się odczytać pliku”. Wiersz `new` w tym zadaniu: zaznaczony checkbox, status „sprawdzam…” (sprawdzanie dochodzi w Zadaniu 6). Checkbox z `aria-label={tytuł}`; brak tytułu → wyświetlane i w `aria-label` „(bez tytułu) #N” (N = `index + 1`). Input pliku: `accept=".json,application/json"`, ukryty, otwierany przyciskiem „Wybierz plik…”.
+- [ ] **Krok 3: Zaimplementuj** — stan: `step: "paste" | "preview" | "done"`, `text`, `error`, `items`. Wykrywanie wklejenia (Review Focus 4): w `onPaste` zapamiętaj `pasted = event.clipboardData.getData("text")`; w `onChange` uruchom podgląd, gdy `event.target.value === pasted`. Plik: `file.size` przed `file.text()`; wyjątek `file.text()` → „Nie udało się odczytać pliku”. Wiersz `new` w tym zadaniu: zaznaczony checkbox, status „czeka na sprawdzenie” (sprawdzanie dochodzi w Zadaniu 6). Checkbox z `aria-label={tytuł}`; brak tytułu → wyświetlane i w `aria-label` „(bez tytułu) #N” (N = `index + 1`). Input pliku: `accept=".json,application/json"`, ukryty, otwierany przyciskiem „Wybierz plik…”.
 
 - [ ] **Krok 4: Uruchom — przechodzą** + `npx tsc -b`.
 
 - [ ] **Krok 5: Commit**
 
 ```bash
-git add frontend/src/components/ImportDialog.tsx frontend/src/components/ImportDialog.test.tsx frontend/src/components/ui/checkbox.tsx frontend/package.json frontend/package-lock.json
+git add frontend/src/components/ImportDialog.tsx frontend/src/components/ImportDialog.test.tsx frontend/src/components/ui/checkbox.tsx frontend/src/components/ui/progress.tsx frontend/package.json frontend/package-lock.json
 git commit -m "Okno importu: wklejanie, plik, podgląd"
 ```
 
@@ -279,7 +282,7 @@ git commit -m "Okno importu: wklejanie, plik, podgląd"
 
 **Interfejsy:**
 - Używa: `runTests({ language, kind, code: task.solution, tests: task.tests })` z `api.ts`.
-- Stan wiersza: `check: "pending" | "pass" | "fail" | "missing" | "error"` + `failed`/`total` dla `fail`; `checked: boolean`.
+- Stan wiersza: `check: "waiting" | "running" | "pass" | "fail" | "missing" | "error"` + `failed`/`total` dla `fail`; `checked: boolean`.
 
 - [ ] **Krok 1: Testy, które padają** (atrapa `fetch` sterowana ręcznie dla `/api/run`)
 
@@ -289,7 +292,8 @@ git commit -m "Okno importu: wklejanie, plik, podgląd"
 | `część nie przechodzi` | 2 × `fail`/`error`/`timeout` z 5 → „Nie przechodzi 2 z 5 testów”, checkbox **odznaczony**, da się zaznaczyć |
 | `brak środowiska` | 503 dla zadania C# → „Nie sprawdzono (brak .NET)”; dla Pythona → „(brak Pythona)”; zaznaczony |
 | `inny błąd` | 500 → „Nie udało się sprawdzić”, zaznaczony |
-| `po kolei` | 2 zadania: drugie `/api/run` dopiero po odpowiedzi na pierwsze; nad listą „Sprawdzam rozwiązania: 1 z 2…” |
+| `po kolei` | 2 zadania: drugie `/api/run` dopiero po odpowiedzi na pierwsze; pierwszy wiersz „sprawdzam…”, drugi „czeka na sprawdzenie”; nad listą „Sprawdzam rozwiązania: 1 z 2…”, pasek `progressbar` z `aria-valuenow` 0 |
+| `podsumowanie` | po zakończeniu: „Sprawdzono 4 rozwiązania” i „2 gotowe · 1 nie przechodzi · 1 bez sprawdzenia” (grupy zerowe pominięte); pasek pełny |
 | `przycisk w trakcie` | „Importuj …” nieaktywny, dopóki trwa sprawdzanie |
 | `licznik z odmianą` | 3 zaznaczone → „Importuj 3 zadania”; 1 → „Importuj 1 zadanie”; 0 → przycisk nieaktywny |
 | `Wstecz przerywa` | „Wstecz” w trakcie → brak kolejnych `/api/run`, spóźniona odpowiedź nie zmienia stanu (brak ostrzeżeń `act`) |
@@ -325,15 +329,15 @@ git commit -m "Okno importu: sprawdzanie rozwiązań przez /api/run"
 | Test | Asercja |
 |---|---|
 | `importuje zaznaczone` | odznacz 1 z 3 → „Importuj 2 zadania” → `POST /api/import` z dokładnie 2 zadaniami (`task` z podglądu) |
-| `wynik` | odpowiedź `{imported: 2, skipped: 0}` → „Zaimportowano 2 zadania”; `{imported: 1, skipped: 1}` → „Zaimportowano 1 zadanie, pominięto 1 — już istnieją”; `onImported` wywołane raz; „Zamknij” zamyka okno |
+| `wynik` | odpowiedź `{imported: 2, skipped: 0, added: [2 pozycje]}` → „Zaimportowano 2 zadania”, druga linijka ze specu §5, oba tytuły z plakietkami języka; `{imported: 1, skipped: 1, added: [1]}` → „Zaimportowano 1 zadanie, pominięto 1 — już istnieją” i jeden tytuł; `onImported` wywołane raz; „Zamknij” zamyka okno |
 | `podwójne kliknięcie` | dwa szybkie kliknięcia → jedno żądanie `/api/import`; przycisk nieaktywny w trakcie (Review Focus 5) |
-| `błąd importu` | 500 → „Nie zaimportowano żadnego zadania — spróbuj ponownie”, wiersze i zaznaczenia zostają |
+| `błąd importu` | 500 → „Nie zaimportowano żadnego zadania — spróbuj ponownie” i „Zaznaczenia zostały zachowane. Sprawdź, czy aplikacja nadal działa.”, wiersze i zaznaczenia zostają |
 | `Zadania.test.tsx: przycisk w nagłówku i w pustym stanie` | `getByRole("button", { name: "Importuj" })` przy liście i przy `EMPTY_LIST` |
 | `Zadania.test.tsx: odświeża listę po imporcie` | po zakończonym imporcie kolejne żądanie `/api/tasks` |
 
 - [ ] **Krok 2: Uruchom — padają.**
 
-- [ ] **Krok 3: Zaimplementuj** — liczebnik w „pominięto” bez odmiany słowa („pominięto 1 — już istnieją”) zgodnie ze specem; tekst „Zaimportowano …” przez `plural(n, "zadanie", "zadania", "zadań")`.
+- [ ] **Krok 3: Zaimplementuj** — wygląd wyniku: artboard `Import-wynik`; przycisk „Importuj” na Zadaniach: artboardy `Zadania` (outline, przed „Dodaj zadanie”) i `Zadania-puste` (outline, po „Dodaj pierwsze zadanie”). Liczebnik w „pominięto” bez odmiany słowa („pominięto 1 — już istnieją”) zgodnie ze specem; tekst „Zaimportowano …” przez `plural(n, "zadanie", "zadania", "zadań")`.
 
 - [ ] **Krok 4: Uruchom — przechodzą** — `npx vitest run` i `npx tsc -b`.
 
