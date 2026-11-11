@@ -163,3 +163,162 @@ it("opis okna z liczbą znalezionych zadań", async () => {
     expect(screen.getByText("Znaleziono 3 zadania. Zaznacz te, które chcesz dodać do biblioteki.")).toBeInTheDocument(),
   )
 })
+
+// --- Sprawdzanie rozwiązań (Zadanie 6) ---
+
+// Atrapa API, w której każde /api/run czeka, aż test sam poda odpowiedź (kontrola kolejności)
+function controlledApi(preview: unknown) {
+  const runs: { body: { language: string; kind: string; code: string; tests: unknown[] }; resolve: (r: Response) => void }[] = []
+  const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    if (url === "/api/import/preview") return Promise.resolve(new Response(JSON.stringify(preview), { status: 200 }))
+    if (url === "/api/run") {
+      return new Promise<Response>((resolve) => runs.push({ body: JSON.parse(init!.body as string), resolve }))
+    }
+    return Promise.resolve(new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 }))
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  return { fetchMock, runs }
+}
+
+function runResponse(statuses: string[]) {
+  const results = statuses.map((status) => ({ status, input: "f()", expected: "1", actual: "1", message: null }))
+  return new Response(JSON.stringify({ results, duration_ms: 5 }), { status: 200 })
+}
+
+function newItems(tasks: (typeof TASK)[]) {
+  return { items: tasks.map((task, index) => ({ index, title: task.title, language: task.language, status: "new", message: "", task })) }
+}
+
+async function pastePreview(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByLabelText("JSON z zadaniami"))
+  await user.paste("[1]")
+}
+
+it("rozwiązanie przechodzi testy — zadanie zaznaczone", async () => {
+  const { runs } = controlledApi(newItems([TASK]))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  await waitFor(() => expect(runs).toHaveLength(1))
+  expect(runs[0].body).toEqual({ language: "python", kind: "function", code: "s", tests: TASK.tests })
+  await act(async () => runs[0].resolve(runResponse(["pass", "pass", "pass", "pass", "pass"])))
+  expect(await screen.findByText("Rozwiązanie przechodzi testy")).toBeInTheDocument()
+  expect(screen.getByRole("checkbox", { name: TASK.title })).toBeChecked()
+})
+
+it("rozwiązanie nie przechodzi części testów — zadanie odznaczone, ale da się je zaznaczyć", async () => {
+  const { runs } = controlledApi(newItems([TASK]))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  await waitFor(() => expect(runs).toHaveLength(1))
+  await act(async () => runs[0].resolve(runResponse(["pass", "fail", "pass", "error", "pass"])))
+  expect(await screen.findByText("Nie przechodzi 2 z 5 testów")).toBeInTheDocument()
+  const box = screen.getByRole("checkbox", { name: TASK.title })
+  expect(box).not.toBeChecked()
+  await user.click(box)
+  expect(box).toBeChecked()
+})
+
+it("brak Pythona / .NET — „Nie sprawdzono”, zadanie zaznaczone", async () => {
+  const { runs } = controlledApi(newItems([TASK, PROGRAM]))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  await waitFor(() => expect(runs).toHaveLength(1))
+  await act(async () => runs[0].resolve(new Response(JSON.stringify({ detail: "Nie znaleziono Pythona" }), { status: 503 })))
+  await waitFor(() => expect(runs).toHaveLength(2))
+  await act(async () => runs[1].resolve(new Response(JSON.stringify({ detail: "Nie znaleziono dotnet" }), { status: 503 })))
+  expect(await screen.findByText("Nie sprawdzono (brak Pythona)")).toBeInTheDocument()
+  expect(screen.getByText("Nie sprawdzono (brak .NET)")).toBeInTheDocument()
+  expect(screen.getByRole("checkbox", { name: TASK.title })).toBeChecked()
+  expect(screen.getByRole("checkbox", { name: PROGRAM.title })).toBeChecked()
+})
+
+it("inny błąd sprawdzania — „Nie udało się sprawdzić”, zadanie zaznaczone", async () => {
+  const { runs } = controlledApi(newItems([TASK]))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  await waitFor(() => expect(runs).toHaveLength(1))
+  await act(async () => runs[0].resolve(new Response("Internal Server Error", { status: 500 })))
+  expect(await screen.findByText("Nie udało się sprawdzić")).toBeInTheDocument()
+  expect(screen.getByRole("checkbox", { name: TASK.title })).toBeChecked()
+})
+
+it("sprawdza po kolei: drugie zadanie dopiero po odpowiedzi na pierwsze", async () => {
+  const { runs } = controlledApi(newItems([TASK, PROGRAM]))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  await waitFor(() => expect(runs).toHaveLength(1))
+  expect(within(screen.getByRole("checkbox", { name: TASK.title }).closest("tr")!).getByText("sprawdzam…")).toBeInTheDocument()
+  expect(within(screen.getByRole("checkbox", { name: PROGRAM.title }).closest("tr")!).getByText("czeka na sprawdzenie")).toBeInTheDocument()
+  expect(screen.getByText("Sprawdzam rozwiązania: 1 z 2…")).toBeInTheDocument()
+  expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0")
+  await act(async () => runs[0].resolve(runResponse(["pass"])))
+  await waitFor(() => expect(runs).toHaveLength(2))
+  expect(screen.getByText("Sprawdzam rozwiązania: 2 z 2…")).toBeInTheDocument()
+})
+
+it("po sprawdzeniu: podsumowanie i pełny pasek", async () => {
+  const tasks = [TASK, { ...TASK, title: "B" }, { ...TASK, title: "C" }, PROGRAM]
+  const { runs } = controlledApi(newItems(tasks))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  const answers = [runResponse(["pass"]), runResponse(["pass"]), runResponse(["fail"]),
+    new Response(JSON.stringify({ detail: "brak" }), { status: 503 })]
+  for (let i = 0; i < answers.length; i++) {
+    await waitFor(() => expect(runs).toHaveLength(i + 1))
+    await act(async () => runs[i].resolve(answers[i]))
+  }
+  expect(await screen.findByText("Sprawdzono 4 rozwiązania")).toBeInTheDocument()
+  expect(screen.getByText("2 gotowe · 1 nie przechodzi · 1 bez sprawdzenia")).toBeInTheDocument()
+  expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100")
+})
+
+it("przycisk importu nieaktywny w trakcie sprawdzania", async () => {
+  const { runs } = controlledApi(newItems([TASK]))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  await waitFor(() => expect(runs).toHaveLength(1))
+  expect(screen.getByRole("button", { name: "Importuj 1 zadanie" })).toBeDisabled()
+  await act(async () => runs[0].resolve(runResponse(["pass"])))
+  await waitFor(() => expect(screen.getByRole("button", { name: "Importuj 1 zadanie" })).toBeEnabled())
+})
+
+it("licznik na przycisku z odmianą; bez zaznaczonych — nieaktywny", async () => {
+  const tasks = [TASK, { ...TASK, title: "B" }, { ...TASK, title: "C" }]
+  const { runs } = controlledApi(newItems(tasks))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  for (let i = 0; i < 3; i++) {
+    await waitFor(() => expect(runs).toHaveLength(i + 1))
+    await act(async () => runs[i].resolve(runResponse(["pass"])))
+  }
+  expect(await screen.findByRole("button", { name: "Importuj 3 zadania" })).toBeEnabled()
+  await user.click(screen.getByRole("checkbox", { name: "B" }))
+  await user.click(screen.getByRole("checkbox", { name: "C" }))
+  expect(screen.getByRole("button", { name: "Importuj 1 zadanie" })).toBeEnabled()
+  await user.click(screen.getByRole("checkbox", { name: TASK.title }))
+  expect(screen.getByRole("button", { name: "Importuj" })).toBeDisabled()
+})
+
+it("„Wstecz” przerywa sprawdzanie", async () => {
+  const { runs } = controlledApi(newItems([TASK, PROGRAM]))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  await waitFor(() => expect(runs).toHaveLength(1))
+  await user.click(screen.getByRole("button", { name: "Wstecz" }))
+  await act(async () => runs[0].resolve(runResponse(["pass"])))
+  await act(async () => {})
+  expect(runs).toHaveLength(1)
+  expect(screen.getByLabelText("JSON z zadaniami")).toBeInTheDocument()
+})
+
+it("zamknięcie okna przerywa sprawdzanie", async () => {
+  const { runs } = controlledApi(newItems([TASK, PROGRAM]))
+  const { user } = await openDialog()
+  await pastePreview(user)
+  await waitFor(() => expect(runs).toHaveLength(1))
+  await user.keyboard("{Escape}")
+  await act(async () => runs[0].resolve(runResponse(["pass"])))
+  await act(async () => {})
+  expect(runs).toHaveLength(1)
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+})

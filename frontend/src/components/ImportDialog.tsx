@@ -1,11 +1,12 @@
 import { Check, ChevronLeft, CircleAlert, CircleCheck, CircleMinus, CircleX, ClipboardCopy, Clock, Copy, Download, FileUp, Loader2, ShieldAlert, TriangleAlert, Upload } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
-import { ApiError, previewImport, type ImportPreviewItem } from "@/api"
+import { ApiError, previewImport, runTests, type ImportPreviewItem, type TaskInput } from "@/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { LANGUAGE_LABEL } from "@/labels"
@@ -27,6 +28,9 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState<Row[]>([])
   const [copied, setCopied] = useState(false)
+  // Każdy nowy podgląd zwiększa licznik → efekt niżej sprawdza rozwiązania z checkList od początku
+  const [checkRun, setCheckRun] = useState(0)
+  const checkList = useRef<{ index: number; task: TaskInput }[]>([])
   // Tekst ostatniego wklejenia — onChange porównuje z nim nową wartość pola (spec: wklejenie uruchamia podgląd)
   const pastedRef = useRef<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -34,6 +38,34 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
 
   useEffect(() => () => clearTimeout(copyTimer.current), [])
   void onImported                                      // używane po imporcie (Zadanie 7 planu)
+
+  // Sprawdzanie rozwiązań po kolei (jedno /api/run naraz — bez kilku kompilacji C# jednocześnie).
+  // „Wstecz” i zamknięcie okna zmieniają step → sprzątanie efektu ustawia cancelled i pętla się kończy.
+  useEffect(() => {
+    if (step !== "preview" || checkRun === 0) return
+    let cancelled = false
+    async function checkAll() {
+      for (const { index, task } of checkList.current) {
+        if (cancelled) return
+        setRows((current) => current.map((r) => (r.item.index === index ? { ...r, check: "running" } : r)))
+        let update: Partial<Row>
+        try {
+          const response = await runTests({ language: task.language, kind: task.kind, code: task.solution, tests: task.tests })
+          const failed = response.results.filter((result) => result.status !== "pass").length
+          // Rozwiązanie AI nie przechodzi własnych testów → domyślnie nie importujemy (można zaznaczyć ręcznie)
+          update = failed === 0 ? { check: "pass" } : { check: "fail", failed, total: response.results.length, checked: false }
+        } catch (e) {
+          update = { check: e instanceof ApiError && e.status === 503 ? "missing" : "error" }
+        }
+        if (cancelled) return
+        setRows((current) => current.map((r) => (r.item.index === index ? { ...r, ...update } : r)))
+      }
+    }
+    checkAll()
+    return () => {
+      cancelled = true
+    }
+  }, [step, checkRun])
 
   // Wspólne dla wklejenia, pliku i przycisku „Sprawdź”
   async function runPreview(value: string) {
@@ -48,6 +80,8 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
         total: 0,
         checked: item.status === "new",
       })))
+      checkList.current = items.flatMap((item) => (item.task ? [{ index: item.index, task: item.task }] : []))
+      setCheckRun((n) => n + 1)
       setStep("preview")
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Nie udało się sprawdzić pliku")
@@ -69,6 +103,18 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
 
   const found = rows.length
   const selected = rows.filter((r) => r.checked).length
+  // Postęp i podsumowanie sprawdzania (spec importu §5, krok 2)
+  const toCheck = rows.filter((r) => r.check !== null).length
+  const checkedCount = rows.filter((r) => r.check !== null && r.check !== "waiting" && r.check !== "running").length
+  const checking = checkedCount < toCheck
+  const passCount = rows.filter((r) => r.check === "pass").length
+  const failCount = rows.filter((r) => r.check === "fail").length
+  const uncheckedCount = rows.filter((r) => r.check === "missing" || r.check === "error").length
+  const summary = [
+    passCount > 0 ? `${plural(passCount, "gotowe", "gotowe", "gotowych")}` : "",
+    failCount > 0 ? `${plural(failCount, "nie przechodzi", "nie przechodzą", "nie przechodzi")}` : "",
+    uncheckedCount > 0 ? `${uncheckedCount} bez sprawdzenia` : "",
+  ].filter(Boolean).join(" · ")
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
@@ -184,6 +230,20 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
 
         {step === "preview" && (
           <>
+            {toCheck > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-[13px]">
+                  <span aria-live="polite" className="flex items-center gap-1.5 font-medium">
+                    {checking && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                    {checking
+                      ? `Sprawdzam rozwiązania: ${checkedCount + 1} z ${toCheck}…`
+                      : `Sprawdzono ${plural(toCheck, "rozwiązanie", "rozwiązania", "rozwiązań")}`}
+                  </span>
+                  <span className="text-muted-foreground">{summary}</span>
+                </div>
+                <Progress aria-label="Postęp sprawdzania" value={Math.round((checkedCount / toCheck) * 100)} className="h-1.5" />
+              </div>
+            )}
             <div className="max-h-[420px] overflow-auto rounded-lg border">
               <Table className="min-w-[600px]">
                 <TableHeader>
@@ -277,7 +337,7 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
                   <ChevronLeft aria-hidden="true" />
                   Wstecz
                 </Button>
-                <Button disabled>
+                <Button disabled={checking || selected === 0}>
                   <Download aria-hidden="true" />
                   {selected === 0 ? "Importuj" : `Importuj ${plural(selected, "zadanie", "zadania", "zadań")}`}
                 </Button>
