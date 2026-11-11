@@ -10,9 +10,10 @@ from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
-from backend.api.schemas import NotesIn, ReviewIn, RunIn, SettingsIn, TaskIn
+from backend.api.schemas import ImportIn, ImportPreviewIn, NotesIn, ReviewIn, RunIn, SettingsIn, TaskIn
 from backend.core.database import connect
 from backend.services import backup as backup_service
+from backend.services import importer
 from backend.services import scheduler
 from backend.services import settings as settings_service
 from backend.services import stats as stats_service
@@ -65,6 +66,29 @@ def create_router(db_path: str) -> APIRouter:
         finally:
             con.close()
         return {"id": task_id}
+
+    # Import zadań z JSON (np. od AI): najpierw podgląd ze statusami, potem zapis zaznaczonych
+    @router.post("/import/preview")
+    def import_preview(body: ImportPreviewIn):
+        if len(body.text.encode("utf-8")) > 1_048_576:
+            raise HTTPException(413, "Tekst jest za duży (najwyżej 1 MB)")
+        con = connect(db_path)
+        try:
+            items = importer.preview_import(con, body.text)
+        except importer.ImportFormatError as error:
+            raise HTTPException(422, str(error))
+        finally:
+            con.close()
+        return {"items": items}
+
+    @router.post("/import", status_code=201)
+    def import_tasks(body: ImportIn):
+        con = connect(db_path)
+        try:
+            return importer.import_tasks(con, [task.model_dump() for task in body.tasks],
+                                         datetime.now().replace(microsecond=0))
+        finally:
+            con.close()
 
     @router.put("/tasks/{task_id}")
     def update_task(task_id: int, body: TaskIn):

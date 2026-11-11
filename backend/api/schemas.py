@@ -52,6 +52,14 @@ class NotesIn(BaseModel):
     notes: str
 
 
+class ImportPreviewIn(BaseModel):
+    text: str                                 # limit 1 MB sprawdza routes.py (w bajtach UTF-8, odpowiedź 413)
+
+
+class ImportIn(BaseModel):
+    tasks: list[TaskIn] = Field(min_length=1, max_length=100)
+
+
 class RunIn(BaseModel):
     language: Literal["python", "csharp"]
     kind: Literal["function", "program"]
