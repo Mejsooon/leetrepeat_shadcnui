@@ -146,3 +146,36 @@ it("zła strona w adresie wraca do 1", async () => {                   // Etap 6
   const listCalls = fetchMock.mock.calls.map((c) => c[0]).filter((u) => u.startsWith("/api/tasks?"))
   expect(listCalls.every((u) => u.includes("page=1"))).toBe(true)
 })
+
+it("przycisk „Importuj” w nagłówku i w pustym stanie", async () => {
+  stubApi({ "/api/tasks": LIST, "/api/tags": [] })
+  const { unmount } = renderApp("/zadania")
+  await screen.findByText("Two Sum")
+  expect(screen.getByRole("button", { name: "Importuj" })).toBeInTheDocument()
+  unmount()
+  stubApi({ "/api/tasks": EMPTY_LIST, "/api/tags": [] })
+  renderApp("/zadania")
+  await screen.findByRole("link", { name: "Dodaj pierwsze zadanie" })
+  expect(screen.getByRole("button", { name: "Importuj" })).toBeInTheDocument()
+})
+
+it("po imporcie lista zadań się odświeża", async () => {
+  const task = { title: "Nowe z AI", language: "python", kind: "function", difficulty: "easy", description: "d",
+    starter_code: "", hint: "", solution: "s", tests: [{ input: "f()", expected: "1" }], tags: [] }
+  const fetchMock = stubApi({
+    "/api/tasks": LIST, "/api/tags": [],
+    "/api/import/preview": { items: [{ index: 0, title: task.title, language: "python", status: "new", message: "", task }] },
+    "/api/run": { results: [{ status: "pass", input: "f()", expected: "1", actual: "1", message: null }], duration_ms: 1 },
+    "/api/import": { imported: 1, skipped: 0, added: [{ title: task.title, language: "python" }] },
+  })
+  const user = userEvent.setup()
+  renderApp("/zadania")
+  await screen.findByText("Two Sum")
+  const before = urls(fetchMock).length
+  await user.click(screen.getByRole("button", { name: "Importuj" }))
+  await user.click(screen.getByLabelText("JSON z zadaniami"))
+  await user.paste("[1]")
+  await user.click(await screen.findByRole("button", { name: "Importuj 1 zadanie" }, { timeout: 3000 }))
+  await screen.findByText("Zaimportowano 1 zadanie")
+  await waitFor(() => expect(urls(fetchMock).length).toBeGreaterThan(before))
+})

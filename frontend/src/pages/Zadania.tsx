@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router"
 import { getRuntimes, listTags, listTasks, type Difficulty, type Runtimes, type Status, type Tag, type TaskList } from "@/api"
 import { Badge } from "@/components/ui/badge"
+import ImportDialog from "@/components/ImportDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Kbd } from "@/components/ui/kbd"
@@ -42,6 +43,8 @@ export default function Zadania() {
     getRuntimes().then(setRuntimes).catch(() => setRuntimes(null))
   }, [])
   const [tags, setTags] = useState<Tag[]>([])
+  // Zwiększany po imporcie zadań → lista i tagi wczytują się ponownie
+  const [reload, setReload] = useState(0)
   const [search, setSearch] = useState(params.get("q") ?? "")
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -89,11 +92,11 @@ export default function Zadania() {
     return () => {
       cancelled = true
     }
-  }, [query, setParams])
+  }, [query, setParams, reload])
 
   useEffect(() => {
     listTags().then(setTags).catch(() => setTags([]))
-  }, [])
+  }, [reload])
 
   // Pole szukania nadąża za adresem (przycisk Wstecz, klik „Zadania” w panelu)
   const urlQuery = params.get("q") ?? ""
@@ -151,12 +154,15 @@ export default function Zadania() {
               Dodaj zadanie w Pythonie lub C#. Rozwiązuj je z pamięci, a LeetRepeat podpowie, kiedy warto do niego wrócić.
             </p>
           </div>
-          <Button asChild>
-            <Link to="/zadania/nowe">
-              <Plus aria-hidden="true" />
-              Dodaj pierwsze zadanie
-            </Link>
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button asChild>
+              <Link to="/zadania/nowe">
+                <Plus aria-hidden="true" />
+                Dodaj pierwsze zadanie
+              </Link>
+            </Button>
+            <ImportDialog onImported={() => setReload((n) => n + 1)} />
+          </div>
         </div>
         <ol className="grid gap-4 sm:grid-cols-3">
           {steps.map(([title, text], i) => (
@@ -192,12 +198,15 @@ export default function Zadania() {
             </p>
           )}
         </div>
-        <Button asChild>
-          <Link to="/zadania/nowe">
-            <Plus aria-hidden="true" />
-            Dodaj zadanie
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <ImportDialog onImported={() => setReload((n) => n + 1)} />
+          <Button asChild>
+            <Link to="/zadania/nowe">
+              <Plus aria-hidden="true" />
+              Dodaj zadanie
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

@@ -1,6 +1,7 @@
 import { Check, ChevronLeft, CircleAlert, CircleCheck, CircleMinus, CircleX, ClipboardCopy, Clock, Copy, Download, FileUp, Loader2, ShieldAlert, TriangleAlert, Upload } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
-import { ApiError, previewImport, runTests, type ImportPreviewItem, type TaskInput } from "@/api"
+import { ApiError, importTasks, previewImport, runTests, type ImportPreviewItem, type ImportResult, type TaskInput } from "@/api"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -22,12 +23,15 @@ type Row = { item: ImportPreviewItem; check: CheckState | null; failed: number; 
 // Okno „Importuj zadania” (spec importu §5): wklejenie / plik → podgląd ze sprawdzaniem → import
 export default function ImportDialog({ onImported }: { onImported: () => void }) {
   const [open, setOpen] = useState(false)
-  const [step, setStep] = useState<"paste" | "preview">("paste")
+  const [step, setStep] = useState<"paste" | "preview" | "done">("paste")
   const [text, setText] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState<Row[]>([])
   const [copied, setCopied] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importFailed, setImportFailed] = useState(false)
+  const [result, setResult] = useState<ImportResult | null>(null)
   // Każdy nowy podgląd zwiększa licznik → efekt niżej sprawdza rozwiązania z checkList od początku
   const [checkRun, setCheckRun] = useState(0)
   const checkList = useRef<{ index: number; task: TaskInput }[]>([])
@@ -37,7 +41,6 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => () => clearTimeout(copyTimer.current), [])
-  void onImported                                      // używane po imporcie (Zadanie 7 planu)
 
   // Sprawdzanie rozwiązań po kolei (jedno /api/run naraz — bez kilku kompilacji C# jednocześnie).
   // „Wstecz” i zamknięcie okna zmieniają step → sprzątanie efektu ustawia cancelled i pętla się kończy.
@@ -82,6 +85,7 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
       })))
       checkList.current = items.flatMap((item) => (item.task ? [{ index: item.index, task: item.task }] : []))
       setCheckRun((n) => n + 1)
+      setImportFailed(false)
       setStep("preview")
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Nie udało się sprawdzić pliku")
@@ -98,6 +102,8 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
       setText("")
       setError("")
       setRows([])
+      setImportFailed(false)
+      setResult(null)
     }
   }
 
@@ -116,6 +122,22 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
     uncheckedCount > 0 ? `${uncheckedCount} bez sprawdzenia` : "",
   ].filter(Boolean).join(" · ")
 
+  async function runImport() {
+    // Przycisk jest nieaktywny w trakcie żądania — podwójne kliknięcie nie wyśle importu dwa razy
+    setImporting(true)
+    setImportFailed(false)
+    try {
+      const tasks = rows.flatMap((r) => (r.checked && r.item.task ? [r.item.task] : []))
+      setResult(await importTasks(tasks))
+      setStep("done")
+      onImported()
+    } catch {
+      setImportFailed(true)                          // zapis w jednej transakcji — nic nie zostało dodane
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>
@@ -124,13 +146,13 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
           Importuj
         </Button>
       </DialogTrigger>
-      <DialogContent className={step === "paste" ? "sm:max-w-xl" : "sm:max-w-3xl"}>
+      <DialogContent className={step === "preview" ? "sm:max-w-3xl" : "sm:max-w-xl"}>
         <DialogHeader>
           <DialogTitle>Importuj zadania</DialogTitle>
-          <DialogDescription>
-            {step === "paste"
-              ? "Wklej JSON od AI albo wybierz plik z dysku. Przed importem zobaczysz podgląd."
-              : `Znaleziono ${plural(found, "zadanie", "zadania", "zadań")}. Zaznacz te, które chcesz dodać do biblioteki.`}
+          <DialogDescription className={step === "done" ? "sr-only" : undefined}>
+            {step === "paste" && "Wklej JSON od AI albo wybierz plik z dysku. Przed importem zobaczysz podgląd."}
+            {step === "preview" && `Znaleziono ${plural(found, "zadanie", "zadania", "zadań")}. Zaznacz te, które chcesz dodać do biblioteki.`}
+            {step === "done" && "Wynik importu"}
           </DialogDescription>
         </DialogHeader>
 
@@ -330,6 +352,14 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
               </Table>
             </div>
 
+            {importFailed && (
+              <Alert variant="destructive">
+                <CircleAlert aria-hidden="true" />
+                <AlertTitle>Nie zaimportowano żadnego zadania — spróbuj ponownie</AlertTitle>
+                <AlertDescription>Zaznaczenia zostały zachowane. Sprawdź, czy aplikacja nadal działa.</AlertDescription>
+              </Alert>
+            )}
+
             <DialogFooter className="items-center sm:justify-between">
               <span className="text-xs text-muted-foreground">Zadania z błędem i duplikaty nie zostaną dodane.</span>
               <div className="flex gap-2">
@@ -337,11 +367,40 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
                   <ChevronLeft aria-hidden="true" />
                   Wstecz
                 </Button>
-                <Button disabled={checking || selected === 0}>
-                  <Download aria-hidden="true" />
+                <Button disabled={checking || selected === 0 || importing} onClick={runImport}>
+                  {importing ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Download aria-hidden="true" />}
                   {selected === 0 ? "Importuj" : `Importuj ${plural(selected, "zadanie", "zadania", "zadań")}`}
                 </Button>
               </div>
+            </DialogFooter>
+          </>
+        )}
+
+        {step === "done" && result && (
+          <>
+            <Alert role="status">
+              <CircleCheck className="text-success" aria-hidden="true" />
+              <AlertTitle>
+                {`Zaimportowano ${plural(result.imported, "zadanie", "zadania", "zadań")}`}
+                {result.skipped > 0 && `, pominięto ${result.skipped} — już istnieją`}
+              </AlertTitle>
+              <AlertDescription>Nowe zadania są w bibliotece ze statusem „Nowe” i trafią do najbliższej sesji.</AlertDescription>
+            </Alert>
+            {result.added.length > 0 && (
+              <ul aria-label="Zaimportowane zadania" className="flex flex-col rounded-lg border">
+                {result.added.map((task, i) => (
+                  <li key={i} className="flex items-center gap-2.5 border-b px-3 py-2.5 last:border-b-0">
+                    <Check className="size-3.5 text-success" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 font-medium">{task.title}</span>
+                    <Badge variant="outline">{LANGUAGE_LABEL[task.language]}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button>Zamknij</Button>
+              </DialogClose>
             </DialogFooter>
           </>
         )}

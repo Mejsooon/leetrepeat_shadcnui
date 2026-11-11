@@ -167,10 +167,11 @@ it("opis okna z liczbą znalezionych zadań", async () => {
 // --- Sprawdzanie rozwiązań (Zadanie 6) ---
 
 // Atrapa API, w której każde /api/run czeka, aż test sam poda odpowiedź (kontrola kolejności)
-function controlledApi(preview: unknown) {
+function controlledApi(preview: unknown, importAnswer?: () => Promise<Response>) {
   const runs: { body: { language: string; kind: string; code: string; tests: unknown[] }; resolve: (r: Response) => void }[] = []
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url === "/api/import/preview") return Promise.resolve(new Response(JSON.stringify(preview), { status: 200 }))
+    if (url === "/api/import" && importAnswer) return importAnswer()
     if (url === "/api/run") {
       return new Promise<Response>((resolve) => runs.push({ body: JSON.parse(init!.body as string), resolve }))
     }
@@ -321,4 +322,79 @@ it("zamknięcie okna przerywa sprawdzanie", async () => {
   await act(async () => {})
   expect(runs).toHaveLength(1)
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+})
+
+// --- Import i wynik (Zadanie 7) ---
+
+async function checkedPreview(tasks: (typeof TASK)[], importAnswer: () => Promise<Response>, onImported = vi.fn()) {
+  const api = controlledApi(newItems(tasks), importAnswer)
+  const user = userEvent.setup()
+  render(<ImportDialog onImported={onImported} />)
+  await user.click(screen.getByRole("button", { name: "Importuj" }))
+  await pastePreview(user)
+  for (let i = 0; i < tasks.length; i++) {
+    await waitFor(() => expect(api.runs).toHaveLength(i + 1))
+    await act(async () => api.runs[i].resolve(runResponse(["pass"])))
+  }
+  await screen.findByText(/^Sprawdzono/)
+  return { ...api, user, onImported }
+}
+
+function imported(added: { title: string; language: string }[], skipped = 0) {
+  return () => Promise.resolve(new Response(JSON.stringify({ imported: added.length, skipped, added }), { status: 201 }))
+}
+
+it("importuje tylko zaznaczone zadania", async () => {
+  const tasks = [TASK, { ...TASK, title: "B" }, { ...TASK, title: "C" }]
+  const { user, fetchMock } = await checkedPreview(tasks, imported([{ title: TASK.title, language: "python" }, { title: "C", language: "python" }]))
+  await user.click(screen.getByRole("checkbox", { name: "B" }))
+  await user.click(screen.getByRole("button", { name: "Importuj 2 zadania" }))
+  const calls = fetchMock.mock.calls.filter((c) => c[0] === "/api/import")
+  expect(calls).toHaveLength(1)
+  expect(JSON.parse(calls[0][1]!.body as string)).toEqual({ tasks: [tasks[0], tasks[2]] })
+})
+
+it("wynik: liczba, opis i lista zaimportowanych; „Zamknij” zamyka okno", async () => {
+  const added = [{ title: TASK.title, language: "python" }, { title: PROGRAM.title, language: "csharp" }]
+  const { user, onImported } = await checkedPreview([TASK, PROGRAM], imported(added))
+  await user.click(screen.getByRole("button", { name: "Importuj 2 zadania" }))
+  expect(await screen.findByText("Zaimportowano 2 zadania")).toBeInTheDocument()
+  expect(screen.getByText("Nowe zadania są w bibliotece ze statusem „Nowe” i trafią do najbliższej sesji.")).toBeInTheDocument()
+  const list = screen.getByRole("list", { name: "Zaimportowane zadania" })
+  expect(within(list).getByText(TASK.title)).toBeInTheDocument()
+  expect(within(list).getByText("C#")).toBeInTheDocument()
+  expect(onImported).toHaveBeenCalledTimes(1)
+  await user.click(screen.getByRole("button", { name: "Zamknij" }))
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+})
+
+it("wynik z pominiętymi duplikatami", async () => {
+  const { user } = await checkedPreview([TASK, PROGRAM], imported([{ title: TASK.title, language: "python" }], 1))
+  await user.click(screen.getByRole("button", { name: "Importuj 2 zadania" }))
+  expect(await screen.findByText("Zaimportowano 1 zadanie, pominięto 1 — już istnieją")).toBeInTheDocument()
+  expect(within(screen.getByRole("list", { name: "Zaimportowane zadania" })).getAllByRole("listitem")).toHaveLength(1)
+})
+
+it("podwójne kliknięcie „Importuj” wysyła jedno żądanie", async () => {   // Review Focus 5
+  let finish: (r: Response) => void = () => {}
+  const { user, fetchMock } = await checkedPreview([TASK], () => new Promise<Response>((resolve) => { finish = resolve }))
+  const button = screen.getByRole("button", { name: "Importuj 1 zadanie" })
+  await user.dblClick(button)
+  expect(button).toBeDisabled()
+  expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/import")).toHaveLength(1)
+  await act(async () => finish(new Response(JSON.stringify({ imported: 1, skipped: 0, added: [{ title: TASK.title, language: "python" }] }), { status: 201 })))
+  expect(await screen.findByText("Zaimportowano 1 zadanie")).toBeInTheDocument()
+})
+
+it("błąd importu: komunikat, wiersze i zaznaczenia zostają", async () => {
+  const tasks = [TASK, { ...TASK, title: "B" }]
+  const { user, onImported } = await checkedPreview(tasks, () => Promise.resolve(new Response("Internal Server Error", { status: 500 })))
+  await user.click(screen.getByRole("checkbox", { name: "B" }))
+  await user.click(screen.getByRole("button", { name: "Importuj 1 zadanie" }))
+  expect(await screen.findByText("Nie zaimportowano żadnego zadania — spróbuj ponownie")).toBeInTheDocument()
+  expect(screen.getByText("Zaznaczenia zostały zachowane. Sprawdź, czy aplikacja nadal działa.")).toBeInTheDocument()
+  expect(screen.getByRole("checkbox", { name: TASK.title })).toBeChecked()
+  expect(screen.getByRole("checkbox", { name: "B" })).not.toBeChecked()
+  expect(screen.getByRole("button", { name: "Importuj 1 zadanie" })).toBeEnabled()
+  expect(onImported).not.toHaveBeenCalled()
 })
