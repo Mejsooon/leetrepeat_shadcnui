@@ -38,6 +38,9 @@ export default function ImportDialog({ open, onOpenChange, onImported }: Props) 
   // Każdy nowy podgląd zwiększa licznik → efekt niżej sprawdza rozwiązania z checkList od początku
   const [checkRun, setCheckRun] = useState(0)
   const checkList = useRef<{ index: number; task: TaskInput }[]>([])
+  // Numer bieżącego żądania: zamknięcie okna i „Wstecz” go zwiększają, więc spóźniona odpowiedź
+  // (podgląd albo import) niczego już nie zmienia i nie uruchamia sprawdzania rozwiązań
+  const requestId = useRef(0)
   // Tekst ostatniego wklejenia — onChange porównuje z nim nową wartość pola (spec: wklejenie uruchamia podgląd)
   const pastedRef = useRef<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -75,10 +78,12 @@ export default function ImportDialog({ open, onOpenChange, onImported }: Props) 
 
   // Wspólne dla wklejenia, pliku i przycisku „Sprawdź”
   async function runPreview(value: string) {
+    const id = ++requestId.current
     setError("")
     setLoading(true)
     try {
       const { items } = await previewImport(value)
+      if (id !== requestId.current) return
       setRows(items.map((item) => ({
         item,
         check: item.status === "new" ? "waiting" : null,
@@ -91,6 +96,7 @@ export default function ImportDialog({ open, onOpenChange, onImported }: Props) 
       setImportFailed(false)
       setStep("preview")
     } catch (e) {
+      if (id !== requestId.current) return
       setError(e instanceof ApiError ? e.message : "Nie udało się sprawdzić pliku")
     } finally {
       setLoading(false)
@@ -100,6 +106,7 @@ export default function ImportDialog({ open, onOpenChange, onImported }: Props) 
   function changeOpen(next: boolean) {
     onOpenChange(next)
     if (!next) {
+      requestId.current += 1
       // Zamknięcie czyści okno — kolejne otwarcie zaczyna od pustego pola
       setStep("paste")
       setText("")
@@ -127,14 +134,18 @@ export default function ImportDialog({ open, onOpenChange, onImported }: Props) 
 
   async function runImport() {
     // Przycisk jest nieaktywny w trakcie żądania — podwójne kliknięcie nie wyśle importu dwa razy
+    const id = ++requestId.current
     setImporting(true)
     setImportFailed(false)
     try {
       const tasks = rows.flatMap((r) => (r.checked && r.item.task ? [r.item.task] : []))
-      setResult(await importTasks(tasks))
+      const response = await importTasks(tasks)
+      onImported()                                   // zadania są już w bazie — lista ma się odświeżyć zawsze
+      if (id !== requestId.current) return           // okno zamknięte w trakcie — bez powrotu do starego wyniku
+      setResult(response)
       setStep("done")
-      onImported()
     } catch {
+      if (id !== requestId.current) return
       setImportFailed(true)                          // zapis w jednej transakcji — nic nie zostało dodane
     } finally {
       setImporting(false)
@@ -212,7 +223,8 @@ export default function ImportDialog({ open, onOpenChange, onImported }: Props) 
                 placeholder="Wklej tu odpowiedź AI — sam blok JSON albo razem z ```json"
                 className="field-sizing-fixed h-64 resize-y font-mono text-[13px] md:text-[13px]"
                 onPaste={(e) => {
-                  pastedRef.current = e.clipboardData.getData("text")
+                  // Pole tekstowe zamienia CRLF (schowek Windows) na LF — porównujemy z tekstem po tej samej zamianie
+                  pastedRef.current = e.clipboardData.getData("text").replace(/\r\n?/g, "\n")
                 }}
                 onChange={(e) => {
                   const value = e.target.value
@@ -360,7 +372,14 @@ export default function ImportDialog({ open, onOpenChange, onImported }: Props) 
             <DialogFooter className="items-center sm:justify-between">
               <span className="text-xs text-muted-foreground">Zadania z błędem i duplikaty nie zostaną dodane.</span>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep("paste")}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    requestId.current += 1
+                    setImporting(false)
+                    setStep("paste")
+                  }}
+                >
                   <ChevronLeft aria-hidden="true" />
                   Wstecz
                 </Button>

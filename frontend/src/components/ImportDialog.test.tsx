@@ -410,3 +410,47 @@ it("błąd importu: komunikat, wiersze i zaznaczenia zostają", async () => {
   expect(screen.getByRole("button", { name: "Importuj 1 zadanie" })).toBeEnabled()
   expect(onImported).not.toHaveBeenCalled()
 })
+
+// --- Poprawki po przeglądzie końcowym ---
+
+it("wklejenie tekstu z końcami linii Windows (CRLF) też uruchamia podgląd", async () => {
+  const fetchMock = stubApi({ "/api/import/preview": PREVIEW })
+  const { field } = await openDialog()
+  // Pole tekstowe w przeglądarce zamienia CRLF na LF — symulujemy to, co widzi onChange
+  fireEvent.paste(field, { clipboardData: { getData: () => "[\r\n1\r\n]" } })
+  fireEvent.change(field, { target: { value: "[\n1\n]" } })
+  await screen.findByText("Suma liczb parzystych")
+  expect(requests(fetchMock, "/api/import/preview")).toHaveLength(1)
+})
+
+it("zamknięcie okna w trakcie podglądu: nic się nie uruchamia, ponowne otwarcie zaczyna od pustego pola", async () => {
+  let finishPreview: (r: Response) => void = () => {}
+  const runs: string[] = []
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/api/import/preview") return new Promise<Response>((resolve) => { finishPreview = resolve })
+    if (url === "/api/run") runs.push(url)
+    return Promise.resolve(new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 }))
+  }))
+  const { user, field } = await openDialog()
+  await user.click(field)
+  await user.paste("[1]")
+  await user.keyboard("{Escape}")
+  await act(async () => finishPreview(new Response(JSON.stringify(newItems([TASK])), { status: 200 })))
+  await act(async () => {})
+  expect(runs).toHaveLength(0)
+  await user.click(screen.getByRole("button", { name: "Importuj" }))
+  expect(screen.getByLabelText("JSON z zadaniami")).toHaveValue("")
+})
+
+it("zamknięcie okna w trakcie importu: ponowne otwarcie zaczyna od pustego pola", async () => {
+  let finish: (r: Response) => void = () => {}
+  const { user, onImported } = await checkedPreview([TASK], () => new Promise<Response>((resolve) => { finish = resolve }))
+  await user.click(screen.getByRole("button", { name: "Importuj 1 zadanie" }))
+  await user.keyboard("{Escape}")
+  await act(async () => finish(new Response(JSON.stringify({ imported: 1, skipped: 0, added: [{ title: TASK.title, language: "python" }] }), { status: 201 })))
+  await act(async () => {})
+  // Zadania zapisały się w bazie — lista ma się odświeżyć, ale okno nie wraca do starego wyniku
+  expect(onImported).toHaveBeenCalledTimes(1)
+  await user.click(screen.getByRole("button", { name: "Importuj" }))
+  expect(screen.getByLabelText("JSON z zadaniami")).toHaveValue("")
+})
