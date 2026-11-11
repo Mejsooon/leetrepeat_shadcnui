@@ -4,12 +4,14 @@ Ta sama logika obsługuje okno „Importuj” (API) i skrypt scripts/import_seed
 """
 import json
 import sqlite3
+from datetime import datetime
 
 from pydantic import ValidationError
 
 from backend.api.errors import polish_message
 from backend.api.schemas import TaskIn
 from backend.repository import tasks as repo
+from backend.services.tasks import create_task
 
 MAX_TASKS = 100
 
@@ -72,3 +74,23 @@ def preview_import(con: sqlite3.Connection, text: str) -> list[dict]:
             items.append({"index": index, "title": title, "language": language, "status": "new",
                           "message": "", "task": task})
     return items
+
+
+def import_tasks(con: sqlite3.Connection, tasks: list[dict], now: datetime) -> dict:
+    # Wszystko albo nic: przy błędzie w połowie cofamy cały import
+    imported = skipped = 0
+    added = []
+    try:
+        for task in tasks:
+            # Ktoś mógł dodać to samo zadanie między podglądem a importem
+            if repo.task_exists(con, task["title"], task["language"]):
+                skipped += 1
+                continue
+            create_task(con, task, now)
+            imported += 1
+            added.append({"title": task["title"], "language": task["language"]})
+    except Exception:
+        con.rollback()
+        raise
+    con.commit()
+    return {"imported": imported, "skipped": skipped, "added": added}

@@ -4,8 +4,9 @@ from datetime import date, datetime
 
 import pytest
 
-from backend.services.importer import ImportFormatError, preview_import
-from backend.services.tasks import create_task
+from backend.services import importer
+from backend.services.importer import ImportFormatError, import_tasks, preview_import
+from backend.services.tasks import create_task, get_task, list_tasks
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NOW = datetime(2026, 11, 10, 10, 0)
@@ -126,3 +127,38 @@ def test_preview_seed_file(db):
         items = preview_import(db, f.read())
     assert len(items) == 10
     assert all(i["status"] == "new" for i in items)
+
+
+def test_import_tasks_saves_tests_and_tags(db):
+    task = full({**TASK, "tags": ["Listy"], "tests": TASK["tests"] + [{"input": "suma_parzystych([])", "expected": "0"}]})
+    result = import_tasks(db, [task], NOW)
+    assert result == {"imported": 1, "skipped": 0, "added": [{"title": TASK["title"], "language": "python"}]}
+    item = list_tasks(db, TODAY)["items"][0]
+    saved = get_task(db, item["id"], TODAY)
+    assert len(saved["tests"]) == 2
+    assert saved["tags"] == ["Listy"]
+    assert item["status"] == "new"
+
+
+def test_import_tasks_skips_duplicate_added_after_preview(db):
+    task = preview_import(db, json.dumps([TASK]))[0]["task"]
+    create_task(db, full(TASK), NOW)
+    assert import_tasks(db, [task], NOW) == {"imported": 0, "skipped": 1, "added": []}
+    assert list_tasks(db, TODAY)["total"] == 1
+
+
+def test_import_tasks_rollback(db, monkeypatch):
+    calls = []
+    real_create = importer.create_task
+
+    def failing_create(con, data, now):
+        calls.append(data["title"])
+        if len(calls) == 2:
+            raise RuntimeError("awaria zapisu")
+        return real_create(con, data, now)
+
+    monkeypatch.setattr(importer, "create_task", failing_create)
+    tasks = [full(TASK), full({**TASK, "title": "Drugie"})]
+    with pytest.raises(RuntimeError):
+        import_tasks(db, tasks, NOW)
+    assert db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
