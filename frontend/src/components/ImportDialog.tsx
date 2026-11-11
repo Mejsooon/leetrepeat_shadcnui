@@ -1,11 +1,11 @@
-import { Check, ChevronLeft, CircleAlert, CircleCheck, CircleMinus, CircleX, ClipboardCopy, Clock, Copy, Download, FileUp, Loader2, ShieldAlert, TriangleAlert, Upload } from "lucide-react"
+import { Check, ChevronLeft, CircleAlert, CircleCheck, CircleMinus, CircleX, ClipboardCopy, Clock, Copy, Download, FileUp, Loader2, ShieldAlert, TriangleAlert } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { ApiError, importTasks, previewImport, runTests, type ImportPreviewItem, type ImportResult, type TaskInput } from "@/api"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -20,9 +20,12 @@ const MAX_FILE_BYTES = 1_048_576
 type CheckState = "waiting" | "running" | "pass" | "fail" | "missing" | "error"
 type Row = { item: ImportPreviewItem; check: CheckState | null; failed: number; total: number; checked: boolean }
 
-// Okno „Importuj zadania” (spec importu §5): wklejenie / plik → podgląd ze sprawdzaniem → import
-export default function ImportDialog({ onImported }: { onImported: () => void }) {
-  const [open, setOpen] = useState(false)
+// Okno „Importuj zadania” (spec importu §5): wklejenie / plik → podgląd ze sprawdzaniem → import.
+// Przycisk otwierający jest u rodzica (ekran Zadania): okno ma jedno stałe miejsce w drzewie,
+// więc nie znika, gdy ekran przełącza się między pustą biblioteką a tabelą (np. po imporcie).
+type Props = { open: boolean; onOpenChange: (open: boolean) => void; onImported: () => void }
+
+export default function ImportDialog({ open, onOpenChange, onImported }: Props) {
   const [step, setStep] = useState<"paste" | "preview" | "done">("paste")
   const [text, setText] = useState("")
   const [error, setError] = useState("")
@@ -95,7 +98,7 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
   }
 
   function changeOpen(next: boolean) {
-    setOpen(next)
+    onOpenChange(next)
     if (!next) {
       // Zamknięcie czyści okno — kolejne otwarcie zaczyna od pustego pola
       setStep("paste")
@@ -140,12 +143,6 @@ export default function ImportDialog({ onImported }: { onImported: () => void })
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <Upload aria-hidden="true" />
-          Importuj
-        </Button>
-      </DialogTrigger>
       <DialogContent className={step === "preview" ? "sm:max-w-3xl" : "sm:max-w-xl"}>
         <DialogHeader>
           <DialogTitle>Importuj zadania</DialogTitle>

@@ -82,3 +82,18 @@ Kolumna „Koszt pomyłki” mówi, ile kosztuje zmiana zdania.
 | Nagłówek kolejki na Pulpicie: „Dziś w kolejce”, gdy `session_count > 0` | Lista to wtedy dzisiejsza sesja, także po „wszystko zrobione” | Tekst |
 | ⌘ na Macu wykrywany przez `navigator.platform` (+ `userAgent`) | Wciąż działa wszędzie | „Ctrl” na przyszłej przeglądarce Maca |
 | Data w podpowiedzi wykresu bez testu | Recharts nie renderuje się w jsdom | Sama liczba dnia w podpowiedzi |
+
+## Import zadań z JSON (2026-11-10)
+
+Spec: `specs/2026-11-10-import-zadan-design.md`, plan: `plans/2026-11-10-import-zadan.md`.
+
+| Decyzja | Dlaczego | Koszt pomyłki |
+|---|---|---|
+| Import tylko z JSON; `.md` odłożony | Decyzja użytkownika (2026-11-10) — JSON od AI jest prosty i już obsługiwany | Parser `.md` jako osobna funkcja |
+| Logika importu w `services/importer.py`, wspólna dla okna i `import_seed.py` | Jedno źródło reguł (walidacja `TaskIn`, duplikaty, transakcja) | Brak |
+| Wklejenie wykrywane przez porównanie wartości pola z tekstem ze schowka (`onPaste` → `onChange`) | Działa przy pustym polu i po Ctrl+A, Ctrl+V; zwykłe pisanie nie uruchamia podglądu | Wklejenie w środek tekstu wymaga „Sprawdź” |
+| Okno importu ma jedno stałe miejsce na ekranie Zadania (otwierane przyciskiem z nagłówka albo pustego stanu) | E2E: przy pierwszym imporcie lista przełączała się z pustego stanu na tabelę i okno z wynikiem znikało | Brak |
+| `import_seed.py` wypisuje komunikat z nazwą pola („tests: Dodaj co najmniej jeden test”) | Ten sam komunikat co w oknie importu | Tekst w terminalu |
+| Duplikaty w podglądzie mają opis „Pozycja N w pliku” | Backend zwraca `task` tylko dla nowych zadań | Wygląd |
+| `Progress` (shadcn) przekazuje `value` do Radix Root | Pasek ma `aria-valuenow` | Brak |
+| Licznik zadań w panelu bocznym odświeża się dopiero po zmianie ekranu, nie od razu po imporcie | `AppLayout` odświeża go przy zmianie adresu; spec o nim milczy | Licznik nieaktualny do pierwszej nawigacji |

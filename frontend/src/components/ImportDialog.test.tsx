@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { useState } from "react"
 import ImportDialog from "@/components/ImportDialog"
 import { IMPORT_PROMPT } from "@/lib/importPrompt"
 import { stubApi } from "@/test/renderApp"
@@ -27,12 +28,23 @@ const PREVIEW = {
   ],
 }
 
+// Okno z przyciskiem otwierającym — tak jak na ekranie Zadania
+function Harness({ onImported }: { onImported: () => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>Importuj</button>
+      <ImportDialog open={open} onOpenChange={setOpen} onImported={onImported} />
+    </>
+  )
+}
+
 function requests(fetchMock: ReturnType<typeof stubApi>, path: string) {
   return fetchMock.mock.calls.filter((c) => (c[0] as string) === path)
 }
 
 async function openDialog(user = userEvent.setup()) {
-  render(<ImportDialog onImported={vi.fn()} />)
+  render(<Harness onImported={vi.fn()} />)
   await user.click(screen.getByRole("button", { name: "Importuj" }))
   return { user, field: screen.getByLabelText("JSON z zadaniami") }
 }
@@ -329,7 +341,7 @@ it("zamknięcie okna przerywa sprawdzanie", async () => {
 async function checkedPreview(tasks: (typeof TASK)[], importAnswer: () => Promise<Response>, onImported = vi.fn()) {
   const api = controlledApi(newItems(tasks), importAnswer)
   const user = userEvent.setup()
-  render(<ImportDialog onImported={onImported} />)
+  render(<Harness onImported={onImported} />)
   await user.click(screen.getByRole("button", { name: "Importuj" }))
   await pastePreview(user)
   for (let i = 0; i < tasks.length; i++) {

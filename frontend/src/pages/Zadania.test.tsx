@@ -179,3 +179,36 @@ it("po imporcie lista zadań się odświeża", async () => {
   await screen.findByText("Zaimportowano 1 zadanie")
   await waitFor(() => expect(urls(fetchMock).length).toBeGreaterThan(before))
 })
+
+it("import do pustej biblioteki: okno z wynikiem zostaje po odświeżeniu listy", async () => {
+  const task = { title: "Pierwsze z AI", language: "python", kind: "function", difficulty: "easy", description: "d",
+    starter_code: "", hint: "", solution: "s", tests: [{ input: "f()", expected: "1" }], tags: [] }
+  let listCalls = 0
+  stubApi({
+    "/api/tags": [],
+    "/api/import/preview": { items: [{ index: 0, title: task.title, language: "python", status: "new", message: "", task }] },
+    "/api/run": { results: [{ status: "pass", input: "f()", expected: "1", actual: "1", message: null }], duration_ms: 1 },
+    "/api/import": { imported: 1, skipped: 0, added: [{ title: task.title, language: "python" }] },
+  })
+  // Pierwsze wczytanie: pusta biblioteka; po imporcie: jedno zadanie
+  const base = globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>
+  vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+    if (url.startsWith("/api/tasks")) {
+      listCalls += 1
+      const body = listCalls === 1 ? EMPTY_LIST : { ...LIST, items: [{ ...LIST.items[0], title: task.title }], total: 1,
+        pages: 1, counts: { library: 1, due: 0, new: 1 } }
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+    }
+    return base(url, init)
+  }))
+  const user = userEvent.setup()
+  renderApp("/zadania")
+  await screen.findByText("Twój kod. Twoje tempo.")
+  await user.click(screen.getByRole("button", { name: "Importuj" }))
+  await user.click(screen.getByLabelText("JSON z zadaniami"))
+  await user.paste("[1]")
+  await user.click(await screen.findByRole("button", { name: "Importuj 1 zadanie" }, { timeout: 3000 }))
+  await waitFor(() => expect(listCalls).toBe(2))
+  expect(await screen.findByText("Zaimportowano 1 zadanie")).toBeInTheDocument()
+  expect(screen.getByRole("dialog")).toBeInTheDocument()
+})

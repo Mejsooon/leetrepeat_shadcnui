@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Code, HardDrive, Info, Pencil, Plus, Search } from "lucide-react"
+import { ChevronLeft, ChevronRight, Code, HardDrive, Info, Pencil, Plus, Search, Upload } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router"
 import { getRuntimes, listTags, listTasks, type Difficulty, type Runtimes, type Status, type Tag, type TaskList } from "@/api"
@@ -45,6 +45,17 @@ export default function Zadania() {
   const [tags, setTags] = useState<Tag[]>([])
   // Zwiększany po imporcie zadań → lista i tagi wczytują się ponownie
   const [reload, setReload] = useState(0)
+  const [importOpen, setImportOpen] = useState(false)
+  // Jedno okno importu dla obu wersji ekranu (pusta biblioteka / tabela) — zob. komentarz w ImportDialog
+  const importDialog = (
+    <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={() => setReload((n) => n + 1)} />
+  )
+  const importButton = (
+    <Button variant="outline" onClick={() => setImportOpen(true)}>
+      <Upload aria-hidden="true" />
+      Importuj
+    </Button>
+  )
   const [search, setSearch] = useState(params.get("q") ?? "")
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -139,6 +150,7 @@ export default function Zadania() {
       ["Wracaj w dobrym momencie", "Oceń próbę. Następna powtórka pojawi się w Twoim planie."],
     ]
     return (
+      <>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-semibold tracking-tight">Twoje zadania</h1>
@@ -161,7 +173,7 @@ export default function Zadania() {
                 Dodaj pierwsze zadanie
               </Link>
             </Button>
-            <ImportDialog onImported={() => setReload((n) => n + 1)} />
+            {importButton}
           </div>
         </div>
         <ol className="grid gap-4 sm:grid-cols-3">
@@ -180,6 +192,8 @@ export default function Zadania() {
           Bez rejestracji. Twoje zadania i postępy zostają na tym urządzeniu.
         </p>
       </div>
+      {importDialog}
+      </>
     )
   }
 
@@ -187,6 +201,7 @@ export default function Zadania() {
   const to = data ? Math.min(data.page * PAGE_SIZE, data.total) : 0
 
   return (
+    <>
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
@@ -199,7 +214,7 @@ export default function Zadania() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <ImportDialog onImported={() => setReload((n) => n + 1)} />
+          {importButton}
           <Button asChild>
             <Link to="/zadania/nowe">
               <Plus aria-hidden="true" />
@@ -342,5 +357,7 @@ export default function Zadania() {
         Kliknij tytuł, aby otworzyć zadanie. Każdy język ma osobny harmonogram powtórek.
       </p>
     </div>
+    {importDialog}
+    </>
   )
 }

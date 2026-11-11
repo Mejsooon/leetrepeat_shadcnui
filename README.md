@@ -122,6 +122,21 @@ Inna lokalizacja: zmienna `LEETREPEAT_DB`, np. `LEETREPEAT_DB=~/zadania.db pytho
 
 ## Import zadań
 
+### Zadania od AI (w aplikacji)
+
+1. **Zadania → Importuj → Skopiuj instrukcję dla AI.**
+2. Wklej instrukcję do czatu z AI i dopisz temat na końcu, np. „5 zadań o listach w Pythonie”.
+3. Skopiuj odpowiedź (blok JSON) i wklej ją w oknie importu — albo zapisz jako `.json` i użyj „Wybierz plik…”.
+4. Aplikacja pokaże podgląd i **uruchomi rozwiązanie każdego zadania na jego testach**. Zadania, których
+   rozwiązanie nie przechodzi testów, są domyślnie odznaczone; duplikaty i zadania z błędem są pomijane.
+   Kliknij **Importuj N zadań**.
+
+Import zapisuje wszystko albo nic. Limity: 100 zadań i 1 MB na raz. Format pliku jest taki sam jak
+w `seeds/` — opis pól w `docs/superpowers/specs/2026-11-10-import-zadan-design.md` (§2).
+Sprawdzanie uruchamia kod z pliku na Twoim komputerze — importuj tylko zadania z zaufanego źródła.
+
+### Z terminala
+
 Ze starej wersji (LeetRepeat v2) — przenosi zadania i testy; historia ocen nie jest przenoszona,
 wszystkie zadania startują jako **Nowe** z trudnością „Łatwe”:
 
@@ -140,6 +155,7 @@ python scripts/import_seed.py seeds/python_variables.json
 | `python_variables.json` | 10 zadań z notatki PYTHON — VARIABLES (tag „Zmienne”) |
 
 Zadania o tym samym tytule i języku, które już są w bazie, są pomijane — import można powtarzać.
+`import_seed.py` używa tej samej logiki co okno „Importuj” (bez uruchamiania rozwiązań).
 Oba skrypty przyjmują `--db INNA_BAZA.db` (domyślnie `leetrepeat.db` obok `main.py` albo `LEETREPEAT_DB`).
 
 ## Zmiany we frontendzie
