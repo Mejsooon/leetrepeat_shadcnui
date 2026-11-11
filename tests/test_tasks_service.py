@@ -154,3 +154,10 @@ def test_search_percent_and_underscore_literal(db):                  # Etap 6: %
     titles = lambda q: sorted(item["title"] for item in list_tasks(db, TODAY, q=q)["items"])  # noqa: E731
     assert titles("%") == ["100% pewne"]
     assert titles("a_b") == ["a_b"]
+
+
+def test_task_exists(db):
+    from backend.repository import tasks as repo
+    create_task(db, make(), NOW)
+    assert repo.task_exists(db, "Two Sum", "python") is True
+    assert repo.task_exists(db, "Two Sum", "csharp") is False

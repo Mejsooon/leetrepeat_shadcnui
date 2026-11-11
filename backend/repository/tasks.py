@@ -139,3 +139,7 @@ def library_counts(con: sqlite3.Connection, today: str) -> dict:
                            THEN 1 ELSE 0 END) AS new
            FROM tasks t""", (today,)).fetchone()
     return {"library": row["library"], "due": row["due"] or 0, "new": row["new"] or 0}
+
+
+def task_exists(con: sqlite3.Connection, title: str, language: str) -> bool:
+    return con.execute("SELECT 1 FROM tasks WHERE title = ? AND language = ?", (title, language)).fetchone() is not None
