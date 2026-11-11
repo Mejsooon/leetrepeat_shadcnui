@@ -31,6 +31,14 @@ def preview_import(con: sqlite3.Connection, text: str) -> list[dict]:
         data = json.loads(stripped)
     except json.JSONDecodeError as error:
         raise ImportFormatError(f"Nieprawidłowy JSON w linii {error.lineno}, kolumnie {error.colno}")
+    except (ValueError, RecursionError):
+        # Np. liczba ponad limit cyfr Pythona albo tysiące zagnieżdżonych nawiasów
+        raise ImportFormatError("Nieprawidłowy JSON")
+    # Samotne surogaty (np. "\ud800") nie dadzą się zapisać w bazie — odrzucamy cały tekst
+    try:
+        json.dumps(data, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError:
+        raise ImportFormatError("Tekst zawiera nieprawidłowe znaki Unicode")
 
     # 3. Pojedyncze zadanie traktujemy jak listę z jednym zadaniem
     if isinstance(data, dict):

@@ -70,7 +70,8 @@ def create_router(db_path: str) -> APIRouter:
     # Import zadań z JSON (np. od AI): najpierw podgląd ze statusami, potem zapis zaznaczonych
     @router.post("/import/preview")
     def import_preview(body: ImportPreviewIn):
-        if len(body.text.encode("utf-8")) > 1_048_576:
+        # surrogatepass: tekst z samotnym surogatem też da się zmierzyć (odrzuca go dopiero importer → 422)
+        if len(body.text.encode("utf-8", "surrogatepass")) > 1_048_576:
             raise HTTPException(413, "Tekst jest za duży (najwyżej 1 MB)")
         con = connect(db_path)
         try:

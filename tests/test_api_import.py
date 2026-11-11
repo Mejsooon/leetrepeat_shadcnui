@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 TASK = {
     "title": "Suma liczb parzystych", "language": "python", "kind": "function",
     "description": "Zwróć sumę liczb parzystych.",
@@ -46,3 +48,21 @@ def test_import_blocked_cross_site(client):
     headers = {"Origin": "https://zla-strona.pl"}
     assert client.post("/api/import/preview", json={"text": "[]"}, headers=headers).status_code == 403
     assert client.post("/api/import", json={"tasks": [TASK]}, headers=headers).status_code == 403
+
+
+@pytest.mark.parametrize("text", [
+    "[" * 50_000 + "]" * 50_000,                       # za głęboko zagnieżdżone (RecursionError)
+    "[" + "1" * 5000 + "]",                            # liczba ponad limit cyfr Pythona (ValueError)
+    '[{"title": "\\ud800", "language": "python"}]',    # samotny surogat w tekście JSON → błąd zapisu w SQLite
+])
+def test_preview_malformed_input_is_422_not_500(client, text):
+    response = client.post("/api/import/preview", json={"text": text})
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], str)
+
+
+def test_preview_lone_surrogate_in_text_is_422(client):
+    # Przeglądarka (JSON.stringify) potrafi wysłać samotny surogat jako \ud800 w treści żądania
+    response = client.post("/api/import/preview", content='{"text": "[\\ud800]"}',
+                           headers={"Content-Type": "application/json"})
+    assert response.status_code == 422
