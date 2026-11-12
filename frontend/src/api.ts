@@ -133,6 +133,28 @@ export function deleteTask(id: number): Promise<null> {
   return request<null>(`/tasks/${id}`, { method: "DELETE" })
 }
 
+// --- Import zadań z JSON (spec importu §4) ---
+
+export type ImportStatus = "new" | "duplicate" | "invalid"
+// title/language — tak jak w pliku (null, gdy brak); task — oczyszczone zadanie, tylko dla "new"
+export type ImportPreviewItem = {
+  index: number
+  title: string | null
+  language: Language | null
+  status: ImportStatus
+  message: string
+  task: TaskInput | null
+}
+export type ImportResult = { imported: number; skipped: number; added: { title: string; language: Language }[] }
+
+export function previewImport(text: string): Promise<{ items: ImportPreviewItem[] }> {
+  return request<{ items: ImportPreviewItem[] }>("/import/preview", { method: "POST", body: JSON.stringify({ text }) })
+}
+
+export function importTasks(tasks: TaskInput[]): Promise<ImportResult> {
+  return request<ImportResult>("/import", { method: "POST", body: JSON.stringify({ tasks }) })
+}
+
 // keepalive: żądanie dokończy się nawet przy zamykaniu karty
 export function updateNotes(id: number, notes: string, keepalive = false): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/tasks/${id}/notes`, { method: "PATCH", body: JSON.stringify({ notes }), keepalive })

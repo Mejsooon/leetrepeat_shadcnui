@@ -110,7 +110,7 @@ def test_import_seed_skips_invalid(tmp_path, db, capsys):          # Etap 6: imp
     seed.write_text(json.dumps([good, bad]), encoding="utf-8")
     assert import_seed(str(seed), db, NOW) == (1, 1)
     assert [item["title"] for item in list_tasks(db, date(2026, 11, 9))["items"]] == ["Dobre"]
-    assert "Pominięto „Bez testów”: Dodaj co najmniej jeden test" in capsys.readouterr().out
+    assert "Pominięto „Bez testów”: tests: Dodaj co najmniej jeden test" in capsys.readouterr().out
 
 
 def test_import_v2_skips_invalid(old_db, db, capsys):

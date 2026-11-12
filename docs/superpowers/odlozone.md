@@ -16,6 +16,17 @@ Gdy coś stąd naprawisz — usuń wiersz.
 | 4 | `main.py` (trasa frontendu) | `HEAD /api/...` zwraca 404 (JSON) zamiast 405 | W trasie frontendu dla ścieżek `api/*` przy metodzie HEAD zwracać 405 |
 | 5 | testy | Brak testu wyszukiwania z ukośnikiem `\` (działa poprawnie — sprawdzone ręcznie) i testu, że ponowienie przy 404 się kończy (po naprawie #1) | Dopisać `test_search_backslash_literal` w `tests/test_tasks_service.py` i test w `Sesja.test.tsx` |
 
+## Import zadań z JSON (przegląd końcowy, 2026-11-12)
+
+| # | Gdzie | Co się dzieje | Jak naprawić |
+|---|---|---|---|
+| I1 | `backend/services/importer.py` (komunikat walidacji) | Błąd całego zadania (np. funkcja z pustym `input`) ma pustą nazwę pola: „: Wywołanie funkcji nie może być puste” | `f"{field}: {msg}" if field else msg` + test |
+| I2 | `frontend/src/components/ImportDialog.tsx` (status testów) | „Nie przechodzi 1 z 1 testów” zamiast „z 1 testu” | `row.total === 1 ? "testu" : "testów"` |
+| I3 | `ImportDialog.tsx` (wklejanie) | Ponowne wklejenie identycznego tekstu po błędzie 422 nie uruchamia podglądu (pole się nie zmienia) | W `onPaste`: gdy zaznaczony cały tekst i wklejany = obecny, od razu `runPreview` |
+| I4 | `ImportDialog.tsx` (sprawdzanie) | „Wstecz” i szybki ponowny podgląd mogą na chwilę dać dwa `/api/run` naraz | Czekać na poprzednie żądanie przed startem nowej pętli |
+| I5 | `backend/api/schemas.py` (`TaskIn`) | Podgląd przyjmuje zadania z >50 testami albo kodem >100 000 znaków, których `/api/run` nie uruchomi | Te same limity w `TaskIn` albo osobny komunikat w podglądzie |
+| I6 | `scripts/import_seed.py` | Plik z BOM (Notatnik Windows) → „Nieprawidłowy JSON w linii 1, kolumnie 1” (okno w aplikacji działa) | `encoding="utf-8-sig"` albo `text.lstrip("\ufeff")` w `preview_import` |
+
 ## Świadomie bez zmian
 
 | Co | Dlaczego |
